@@ -1,4 +1,8 @@
 function PortfolioSummary({ investments }) {
+    if (!investments || !Array.isArray(investments) || investments.length === 0) {
+        return null; // Don't render anything if no investments
+    }
+
     const totalInvested = investments.reduce((sum, inv) =>
         sum + (inv.purchase_price * inv.quantity), 0
     );

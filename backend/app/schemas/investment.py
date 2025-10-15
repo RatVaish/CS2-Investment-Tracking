@@ -34,5 +34,28 @@ class Investment(InvestmentBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
+    current_price: Optional[float] = None
+    price_last_updated: Optional[datetime] = None
+
+    @property
+    def profit_loss(self) -> Optional[float]:
+        """
+        Calculate profit loss
+        :return:
+        """
+        if self.current_price is not None:
+            return (self.current_price - self.purchase_price) * self.quantity
+        return None
+
+    @property
+    def roi_percentage(self) -> Optional[float]:
+        """
+        Calculate ROI percentage
+        :return:
+        """
+        if self.current_price is not None and self.purchase_price > 0:
+            return ((self.current_price - self.purchase_price) /self.purchase_price) * 100
+        return None
+
     class Config:
         from_attributes = True

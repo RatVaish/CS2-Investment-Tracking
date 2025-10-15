@@ -36,4 +36,14 @@ export const investmentAPI = {
     delete: async (id) => {
         await apiClient.delete(`/investments/${id}`)
     },
+
+    refreshPrice: async (id) => {
+        const response = await apiClient.post(`/prices/refresh/${id}`);
+        return response.data;
+    },
+
+    refreshAllPrices: async () => {
+        const response = await apiClient.post('/prices/refresh-all');
+        return response.data;
+    },
 };

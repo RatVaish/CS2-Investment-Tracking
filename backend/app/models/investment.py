@@ -29,3 +29,6 @@ class Investment(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    current_price = Column(Float, nullable=True)
+    price_last_updated = Column(DateTime, nullable=True)
