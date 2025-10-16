@@ -7,6 +7,8 @@ function Portfolio() {
   const [sortBy, setSortBy] = useState('created_at');
   const [sortOrder, setSortOrder] = useState('desc');
   const [refreshing, setRefreshing] = useState(null);
+  const [lastRefreshTime, setLastRefreshTime] = useState({});
+  const [cooldowns, setCooldowns] = useState({});
 
   const fetchInvestments = async () => {
     try {
@@ -34,12 +36,47 @@ function Portfolio() {
   };
 
   const handleRefreshPrice = async (id) => {
+    // Check if on cooldown
+    const now = Date.now();
+    const lastRefresh = lastRefreshTime[id] || 0;
+    const timeSinceRefresh = now - lastRefresh;
+    const cooldownMs = 5000; // 5 second cooldown
+
+    if (timeSinceRefresh < cooldownMs) {
+      alert(`Please wait ${Math.ceil((cooldownMs - timeSinceRefresh) / 1000)} seconds before refreshing again`);
+      return;
+    }
+
     try {
       setRefreshing(id);
-      await investmentAPI.refreshPrice(id);
+      const result = await investmentAPI.refreshPrice(id);
+
+      // Set last refresh time
+      setLastRefreshTime(prev => ({ ...prev, [id]: Date.now() }));
+
+      // Start cooldown timer
+      setCooldowns(prev => ({ ...prev, [id]: 5 }));
+      const countdown = setInterval(() => {
+        setCooldowns(prev => {
+          const newCooldown = (prev[id] || 0) - 1;
+          if (newCooldown <= 0) {
+            clearInterval(countdown);
+            const { [id]: _, ...rest } = prev;
+            return rest;
+          }
+          return { ...prev, [id]: newCooldown };
+        });
+      }, 1000);
+
+      // Check if the refresh was successful
+      if (result.success === false) {
+        alert(result.message || 'Failed to fetch price from Steam Market');
+      }
+
       await fetchInvestments();
     } catch (err) {
-      alert('Failed to refresh price: ' + err.message);
+      console.error('Refresh error:', err);
+      alert('Failed to refresh price: ' + (err.response?.data?.message || err.message));
     } finally {
       setRefreshing(null);
     }
@@ -361,25 +398,25 @@ function Portfolio() {
                         <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                           <button
                             onClick={() => handleRefreshPrice(inv.id)}
-                            disabled={refreshing === inv.id}
+                            disabled={refreshing === inv.id || cooldowns[inv.id]}
                             style={{
                               padding: '8px 16px',
-                              backgroundColor: refreshing === inv.id ? '#4b5563' : '#3b82f6',
+                              backgroundColor: (refreshing === inv.id || cooldowns[inv.id]) ? '#4b5563' : '#3b82f6',
                               color: '#ffffff',
                               fontSize: '14px',
                               fontWeight: '500',
                               border: 'none',
                               borderRadius: '6px',
-                              cursor: refreshing === inv.id ? 'not-allowed' : 'pointer'
+                              cursor: (refreshing === inv.id || cooldowns[inv.id]) ? 'not-allowed' : 'pointer'
                             }}
                             onMouseOver={(e) => {
-                              if (refreshing !== inv.id) e.target.style.backgroundColor = '#2563eb';
+                              if (refreshing !== inv.id && !cooldowns[inv.id]) e.target.style.backgroundColor = '#2563eb';
                             }}
                             onMouseOut={(e) => {
-                              if (refreshing !== inv.id) e.target.style.backgroundColor = '#3b82f6';
+                              if (refreshing !== inv.id && !cooldowns[inv.id]) e.target.style.backgroundColor = '#3b82f6';
                             }}
                           >
-                            {refreshing === inv.id ? '...' : '🔄'}
+                            {refreshing === inv.id ? '...' : cooldowns[inv.id] ? `${cooldowns[inv.id]}s` : '🔄'}
                           </button>
                           <button
                             onClick={() => handleDelete(inv.id, inv.item_name)}
