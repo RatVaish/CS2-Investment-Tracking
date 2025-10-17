@@ -32,8 +32,27 @@ function AddInvestmentForm({ onInvestmentAdded }) {
     setError(null);
 
     try {
+      // Auto-format item names based on type
+      let formattedItemName = formData.item_name.trim();
+
+      // Add "Sticker | " prefix if it's a sticker and doesn't already have it
+      if (formData.item_type === 'sticker' && !formattedItemName.startsWith('Sticker | ')) {
+        formattedItemName = `Sticker | ${formattedItemName}`;
+      }
+
+      // Add "Patch | " prefix for patches
+      if (formData.item_type === 'patch' && !formattedItemName.startsWith('Patch | ')) {
+        formattedItemName = `Patch | ${formattedItemName}`;
+      }
+
+      // Add "Music Kit | " prefix for music kits
+      if (formData.item_type === 'music_kit' && !formattedItemName.startsWith('Music Kit | ')) {
+        formattedItemName = `Music Kit | ${formattedItemName}`;
+      }
+
       const dataToSend = {
         ...formData,
+        item_name: formattedItemName,
         purchase_price: parseFloat(formData.purchase_price),
         quantity: parseInt(formData.quantity, 10)
       };
@@ -118,9 +137,19 @@ function AddInvestmentForm({ onInvestmentAdded }) {
             value={formData.item_name}
             onChange={handleChange}
             required
-            placeholder="e.g., AK-47 | Redline (Field-Tested)"
+            placeholder="e.g., BLAST.tv (Holo) | Austin 2025"
             style={inputStyle}
           />
+          {formData.item_type === 'sticker' && (
+            <p style={{
+              fontSize: '13px',
+              color: '#9ca3af',
+              marginTop: '8px',
+              fontStyle: 'italic'
+            }}>
+              💡 "Sticker | " will be added automatically
+            </p>
+          )}
         </div>
 
         <div style={{ marginBottom: '48px' }}>

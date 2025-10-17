@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { investmentAPI } from '../api/investments';
+import EditInvestmentModal from '../components/EditInvestmentModal';
 
 function Portfolio() {
   const [investments, setInvestments] = useState([]);
@@ -9,6 +10,8 @@ function Portfolio() {
   const [refreshing, setRefreshing] = useState(null);
   const [lastRefreshTime, setLastRefreshTime] = useState({});
   const [cooldowns, setCooldowns] = useState({});
+  const [editingInvestment, setEditingInvestment] = useState(null);
+  const [filterType, setFilterType] = useState('all');
 
   const fetchInvestments = async () => {
     try {
@@ -94,7 +97,14 @@ function Portfolio() {
   };
 
   const getSortedInvestments = () => {
-    return [...investments].sort((a, b) => {
+    // First filter by type
+    let filtered = investments;
+    if (filterType !== 'all') {
+      filtered = investments.filter(inv => inv.item_type === filterType);
+    }
+
+    // Then sort
+    return [...filtered].sort((a, b) => {
       let aVal = a[sortBy];
       let bVal = b[sortBy];
 
@@ -104,8 +114,7 @@ function Portfolio() {
       }
 
       if (sortOrder === 'asc') {
-        return aVal > bVal ? 1 :
--1;
+        return aVal > bVal ? 1 : -1;
       } else {
         return aVal < bVal ? 1 : -1;
       }
@@ -138,6 +147,19 @@ function Portfolio() {
 
       const config = typeConfig[inv.item_type] || { bg: '6b7280', text: 'ffffff', icon: 'ITEM' };
       return `https://via.placeholder.com/80/${config.bg}/${config.text}?text=${config.icon}`;
+  };
+
+  const handleEdit = (investment) => {
+    setEditingInvestment(investment);
+  };
+
+  const handleEditClose = () => {
+    setEditingInvestment(null);
+  };
+
+  const handleEditUpdated = async () => {
+    await fetchInvestments();
+    setEditingInvestment(null);
   };
 
   if (loading) {
@@ -181,6 +203,104 @@ function Portfolio() {
           Detailed view of all investments
         </p>
       </div>
+
+      {investments.length > 0 && (
+        <div style={{
+          backgroundColor: '#1f2937',
+          borderRadius: '12px',
+          padding: '20px 24px',
+          marginBottom: '24px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '16px',
+          border: '1px solid #374151'
+        }}>
+          <label style={{
+            fontSize: '16px',
+            fontWeight: '600',
+            color: '#f9fafb',
+            minWidth: '120px'
+          }}>
+            Filter by Type:
+          </label>
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            style={{
+              padding: '10px 16px',
+              fontSize: '15px',
+              border: '2px solid #4b5563',
+              borderRadius: '8px',
+              backgroundColor: '#374151',
+              color: '#f9fafb',
+              cursor: 'pointer',
+              minWidth: '200px'
+            }}
+          >
+            <option value="all">All Types ({investments.length})</option>
+            <option value="skin">
+              Skins ({investments.filter(i => i.item_type === 'skin').length})
+            </option>
+            <option value="sticker">
+              Stickers ({investments.filter(i => i.item_type === 'sticker').length})
+            </option>
+            <option value="knife">
+              Knives ({investments.filter(i => i.item_type === 'knife').length})
+            </option>
+            <option value="gloves">
+              Gloves ({investments.filter(i => i.item_type === 'gloves').length})
+            </option>
+            <option value="case">
+              Cases ({investments.filter(i => i.item_type === 'case').length})
+            </option>
+            <option value="agent">
+              Agents ({investments.filter(i => i.item_type === 'agent').length})
+            </option>
+            <option value="patch">
+              Patches ({investments.filter(i => i.item_type === 'patch').length})
+            </option>
+            <option value="music_kit">
+              Music Kits ({investments.filter(i => i.item_type === 'music_kit').length})
+            </option>
+            <option value="graffiti">
+              Graffiti ({investments.filter(i => i.item_type === 'graffiti').length})
+            </option>
+            <option value="other">
+              Other ({investments.filter(i => i.item_type === 'other').length})
+            </option>
+          </select>
+
+          {filterType !== 'all' && (
+            <button
+              onClick={() => setFilterType('all')}
+              style={{
+                padding: '10px 20px',
+                fontSize: '14px',
+                fontWeight: '500',
+                backgroundColor: '#374151',
+                color: '#9ca3af',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer'
+              }}
+              onMouseOver={(e) => {
+                e.target.style.backgroundColor = '#4b5563';
+                e.target.style.color = '#f9fafb';
+              }}
+              onMouseOut={(e) => {
+                e.target.style.backgroundColor = '#374151';
+                e.target.style.color = '#9ca3af';
+              }}
+            >
+              Clear Filter
+            </button>
+          )}
+
+          <div style={{ marginLeft: 'auto', color: '#9ca3af', fontSize: '14px' }}>
+            Showing {getSortedInvestments().length} of {investments.length} items
+          </div>
+        </div>
+      )}
 
       {investments.length === 0 ? (
         <div style={{
@@ -397,6 +517,23 @@ function Portfolio() {
                       <td style={{ padding: '20px 24px' }}>
                         <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                           <button
+                            onClick={() => handleEdit(inv)}
+                            style={{
+                              padding: '8px 16px',
+                              backgroundColor: '#8b5cf6',
+                              color: '#ffffff',
+                              fontSize: '14px',
+                              fontWeight: '500',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: 'pointer'
+                            }}
+                            onMouseOver={(e) => e.target.style.backgroundColor = '#7c3aed'}
+                            onMouseOut={(e) => e.target.style.backgroundColor = '#8b5cf6'}
+                          >
+                            Edit
+                          </button>
+                          <button
                             onClick={() => handleRefreshPrice(inv.id)}
                             disabled={refreshing === inv.id || cooldowns[inv.id]}
                             style={{
@@ -444,6 +581,14 @@ function Portfolio() {
             </table>
           </div>
         </div>
+      )}
+
+      {editingInvestment && (
+        <EditInvestmentModal
+          investment={editingInvestment}
+          onClose={handleEditClose}
+          onUpdated={handleEditUpdated}
+        />
       )}
 
       <style>{`
