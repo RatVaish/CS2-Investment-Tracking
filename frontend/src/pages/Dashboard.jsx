@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { investmentAPI } from '../api/investments';
+import PortfolioValueChart from "../components/PortfolioValueChart.jsx";
+import TopPerformers from '../components/TopPerformers';
 
 function Dashboard() {
   const [investments, setInvestments] = useState([]);
@@ -25,10 +27,22 @@ function Dashboard() {
   const handleRefreshAll = async () => {
     try {
       setRefreshingAll(true);
-      await investmentAPI.refreshAllPrices();
+      const result = await investmentAPI.refreshAllPrices();
+
+      // Show success message with details
+      alert(
+        `Price Refresh Complete!\n\n` +
+        `Total Items: ${result.total}\n` +
+        `Successfully Updated: ${result.updated}\n` +
+        `Failed: ${result.failed}\n` +
+        `Rate Limited: ${result.rate_limited || 0}\n\n` +
+        `Note: This process takes time due to Steam's rate limiting (3 seconds per item).`
+      );
+
       await fetchInvestments();
     } catch (err) {
-      alert('Failed to refresh prices: ' + err.message);
+      console.error('Refresh all error:', err);
+      alert('Failed to refresh prices: ' + (err.response?.data?.detail || err.message));
     } finally {
       setRefreshingAll(false);
     }
@@ -171,7 +185,7 @@ function Dashboard() {
             if (!refreshingAll) e.target.style.backgroundColor = '#10b981';
           }}
         >
-          {refreshingAll ? 'Refreshing...' : '🔄 Refresh All Prices'}
+          {refreshingAll ? '🔄 Refreshing... (This may take a while)' : '🔄 Refresh All Prices'}
         </button>
       </div>
 
@@ -292,6 +306,8 @@ function Dashboard() {
         </div>
       </div>
 
+      <TopPerformers />
+
       {Object.keys(typeBreakdown).length > 0 && (
         <div style={{
           backgroundColor: '#1f2937',
@@ -345,6 +361,16 @@ function Dashboard() {
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+
+     {/*Portfolio Value Chart */}
+      <PortfolioValueChart />
 
       <style>{`
         @keyframes spin {
