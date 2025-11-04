@@ -1,6 +1,8 @@
 from sqlalchemy.orm import Session
 from app.models.investment import Investment
 from app.services.steam_market import steam_market_api
+from app.crud.price_history import create_price_history  # <-- Add this import
+from app.schemas.price_history import PriceHistoryCreate  # <-- Add this import
 from datetime import datetime
 from typing import Optional
 
@@ -8,6 +10,7 @@ from typing import Optional
 def update_investment_price(db: Session, investment: Investment) -> dict:
     """
     Fetch and update the current price for a single investment
+    AND save it to price history
 
     :param db: (Session) Database session
     :param investment: (Investment) Investment object to update
@@ -21,17 +24,32 @@ def update_investment_price(db: Session, investment: Investment) -> dict:
 
         if price_data:
             timestamp = price_data['timestamp']
+            new_price = price_data['price']
 
-            investment.current_price = price_data['price']
+            # Update the investment's current price
+            investment.current_price = new_price
             investment.price_last_updated = timestamp
 
-            db.commit()
+            try:
+                price_history_data = PriceHistoryCreate(
+                    investment_id=investment.id,
+                    price=new_price,
+                    timestamp=timestamp,
+                    source="steam_market",
+                    volume=price_data.get('volume', None)
+                )
+                create_price_history(db, price_history_data)
+                print(f"✓ Price history saved for investment {investment.id}")
+            except Exception as ph_error:
+                print(f"Warning: Failed to save price history: {str(ph_error)}")
+
+            db.commit()  # Single commit for both
             db.refresh(investment)
 
             return {
                 'success': True,
-                'message': 'Price updated successfully',
-                'price': price_data['price']
+                'message': 'Price updated successfully and saved to history',
+                'price': new_price
             }
         else:
             return {
@@ -51,6 +69,8 @@ def update_investment_price(db: Session, investment: Investment) -> dict:
 def update_all_prices(db: Session, skip: int = 0, limit: int = 100) -> dict:
     """
     Update prices for all investments
+    (This function remains mostly the same, it will automatically save history
+    because it calls update_investment_price)
 
     :param db: (Session) Database session
     :param skip: (int) Number of records to skip
@@ -78,5 +98,5 @@ def update_all_prices(db: Session, skip: int = 0, limit: int = 100) -> dict:
         'updated': updated,
         'failed': failed,
         'rate_limited': rate_limited,
-        'message': f'Updated {updated}/{total} prices. {rate_limited} rate limited.'
+        'message': f'Updated {updated}/{total} prices. {rate_limited} rate limited. History saved for all updates.'
     }
