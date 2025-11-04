@@ -46,4 +46,24 @@ export const investmentAPI = {
         const response = await apiClient.post('/prices/refresh-all');
         return response.data;
     },
+
+    getPriceHistory: async (id, days = null) => {
+        const params = days ? { days } : {};
+        const response = await apiClient.get(`/price_history/${id}`, { params });
+        return response.data;
+    },
+
+    getPortfolioValueHistory: async (days = 30) => {
+        const response = await apiClient.get('/portfolio/value-history', {
+            params: { days }
+        });
+        return response.data;
+    },
+
+    getTopPerformers: async (limit = 3) => {
+        const response = await apiClient.get('/portfolio/top-performers', {
+            params: { limit }
+        });
+        return response.data;
+    },
 };

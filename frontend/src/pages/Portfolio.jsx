@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { investmentAPI } from '../api/investments';
+import PriceHistoryModal from '../components/PriceHistoryModal';
 import EditInvestmentModal from '../components/EditInvestmentModal';
 
 function Portfolio() {
@@ -8,10 +9,12 @@ function Portfolio() {
   const [sortBy, setSortBy] = useState('created_at');
   const [sortOrder, setSortOrder] = useState('desc');
   const [refreshing, setRefreshing] = useState(null);
+  const [refreshingAll, setRefreshingAll] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState({});
   const [cooldowns, setCooldowns] = useState({});
   const [editingInvestment, setEditingInvestment] = useState(null);
   const [filterType, setFilterType] = useState('all');
+  const [selectedInvestment, setSelectedInvestment] = useState(null);
 
   const fetchInvestments = async () => {
     try {
@@ -28,6 +31,30 @@ function Portfolio() {
   useEffect(() => {
     fetchInvestments();
   }, []);
+
+  const handleRefreshAll = async () => {
+    try {
+      setRefreshingAll(true);
+      const result = await investmentAPI.refreshAllPrices();
+
+      // Show success message with details
+      alert(
+        `Price Refresh Complete!\n\n` +
+        `Total Items: ${result.total}\n` +
+        `Successfully Updated: ${result.updated}\n` +
+        `Failed: ${result.failed}\n` +
+        `Rate Limited: ${result.rate_limited || 0}\n\n` +
+        `Note: This process takes time due to Steam's rate limiting (3 seconds per item).`
+      );
+
+      await fetchInvestments();
+    } catch (err) {
+      console.error('Refresh all error:', err);
+      alert('Failed to refresh prices: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setRefreshingAll(false);
+    }
+  };
 
   const handleSort = (field) => {
     if (sortBy === field) {
@@ -299,6 +326,31 @@ function Portfolio() {
           <div style={{ marginLeft: 'auto', color: '#9ca3af', fontSize: '14px' }}>
             Showing {getSortedInvestments().length} of {investments.length} items
           </div>
+          {/* Refresh All Button */}
+          <button
+            onClick={handleRefreshAll}
+            disabled={refreshingAll}
+            style={{
+              padding: '10px 20px',
+              fontSize: '14px',
+              fontWeight: '600',
+              backgroundColor: refreshingAll ? '#4b5563' : '#10b981',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: refreshingAll ? 'not-allowed' : 'pointer',
+              whiteSpace: 'nowrap',
+              marginLeft: '16px'
+            }}
+            onMouseOver={(e) => {
+              if (!refreshingAll) e.target.style.backgroundColor = '#059669';
+            }}
+            onMouseOut={(e) => {
+              if (!refreshingAll) e.target.style.backgroundColor = '#10b981';
+            }}
+          >
+            {refreshingAll ? '🔄 Refreshing...' : '🔄 Refresh All Prices'}
+          </button>
         </div>
       )}
 
@@ -442,7 +494,17 @@ function Portfolio() {
                   const isProfit = profitLoss && profitLoss > 0;
 
                   return (
-                    <tr key={inv.id} style={{ borderBottom: '1px solid #374151' }}>
+                    <tr
+                        key={inv.id}
+                        style={{
+                          borderBottom: '1px solid #374151',
+                          cursor: "pointer",
+                          transition: "background-color 0.2s"
+                        }}
+                        onClick={() => setSelectedInvestment(inv)}  // Add click handler
+                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#374151'}  // Add hover
+                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}  // Add hover out
+                    >
                       <td style={{ padding: '20px 24px' }}>
                         <img
                           src={getItemImageUrl(inv)}
@@ -517,7 +579,10 @@ function Portfolio() {
                       <td style={{ padding: '20px 24px' }}>
                         <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                           <button
-                            onClick={() => handleEdit(inv)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEdit(inv);
+                            }}
                             style={{
                               padding: '8px 16px',
                               backgroundColor: '#8b5cf6',
@@ -534,7 +599,10 @@ function Portfolio() {
                             Edit
                           </button>
                           <button
-                            onClick={() => handleRefreshPrice(inv.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRefreshPrice(inv.id);
+                            }}
                             disabled={refreshing === inv.id || cooldowns[inv.id]}
                             style={{
                               padding: '8px 16px',
@@ -556,7 +624,10 @@ function Portfolio() {
                             {refreshing === inv.id ? '...' : cooldowns[inv.id] ? `${cooldowns[inv.id]}s` : '🔄'}
                           </button>
                           <button
-                            onClick={() => handleDelete(inv.id, inv.item_name)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(inv.id, inv.item_name);
+                            }}
                             style={{
                               padding: '8px 16px',
                               backgroundColor: '#ef4444',
@@ -597,6 +668,13 @@ function Portfolio() {
           100% { transform: rotate(360deg); }
         }
       `}</style>
+
+      {selectedInvestment && (
+        <PriceHistoryModal
+          investment={selectedInvestment}
+          onClose={() => setSelectedInvestment(null)}
+        />
+      )}
     </div>
   );
 }

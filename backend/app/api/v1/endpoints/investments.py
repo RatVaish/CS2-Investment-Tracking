@@ -43,6 +43,7 @@ def read_investments(
     investments = get_investments(db=db, skip=skip, limit=limit)
     return investments
 
+
 @router.get("/{investment_id}", response_model=Investment)
 def read_investment(
     investment_id: int,

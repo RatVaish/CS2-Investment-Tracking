@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime, Enum
+from sqlalchemy.orm import relationship
 import enum
 from datetime import datetime
 from app.db.base import Base
@@ -32,3 +33,10 @@ class Investment(Base):
 
     current_price = Column(Float, nullable=True)
     price_last_updated = Column(DateTime, nullable=True)
+
+    #price_history = relationship(
+    #    "app.models.price_history.PriceHistory",
+    #    back_populates="investment",
+    #    cascade="all, delete-orphan",
+    #    lazy="select"
+    #)
