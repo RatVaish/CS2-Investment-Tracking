@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
-from app.services.price_service import update_investment_price, update_all_prices
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
+from app.services.price_service import update_investment_price
 from app.crud.investment import get_investment
+from app.models.investment import Investment
 
 router = APIRouter()
 
@@ -11,17 +13,21 @@ router = APIRouter()
 @router.post("/refresh/{investment_id}")
 def refresh_single_price(
         investment_id: int,
+        current_user: User = Depends(get_current_user),
         db: Session = Depends(get_db)
 ):
     """
-    Refresh price for a single investment
+    Refresh price for a single investment (must be owned by authenticated user).
 
-    :param investment_id: (int) ID of investment to refresh
-    :param db: (Session) Database session
-    :return: (dict) Update result
+    :param investment_id: ID of investment to refresh
+    :param current_user: Current authenticated user
+    :param db: Database session
+    :return: Update result
+    :raises HTTPException: 404 if investment not found or not owned by user
     """
     try:
-        investment = get_investment(db, investment_id)
+        # Get investment with ownership check
+        investment = get_investment(db, investment_id, user_id=current_user.id)
 
         if not investment:
             raise HTTPException(status_code=404, detail="Investment not found")
@@ -49,20 +55,39 @@ def refresh_single_price(
 
 @router.post("/refresh-all")
 def refresh_all_prices(
+        current_user: User = Depends(get_current_user),
         db: Session = Depends(get_db)
 ):
     """
-    Refresh prices for all investments
+    Refresh prices for all investments belonging to the authenticated user.
 
-    :param db: (Session) Database session
-    :return: (dict) Summary of updates
+    :param current_user: Current authenticated user
+    :param db: Database session
+    :return: Summary of updates
     """
-    result = update_all_prices(db)
+    # Get all investments for this user
+    investments = db.query(Investment).filter(
+        Investment.user_id == current_user.id
+    ).all()
+
+    total = len(investments)
+    updated = 0
+    failed = 0
+    rate_limited = 0
+
+    for investment in investments:
+        result = update_investment_price(db, investment)
+        if result['success']:
+            updated += 1
+        else:
+            if 'rate limited' in result['message'].lower():
+                rate_limited += 1
+            failed += 1
 
     return {
-        "message": result['message'],
-        "total": result['total'],
-        "updated": result['updated'],
-        "failed": result['failed'],
-        "rate_limited": result.get('rate_limited', 0)
+        "message": f"Updated {updated}/{total} prices. {rate_limited} rate limited.",
+        "total": total,
+        "updated": updated,
+        "failed": failed,
+        "rate_limited": rate_limited
     }

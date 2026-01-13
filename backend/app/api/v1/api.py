@@ -1,31 +1,39 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints.investments import router as investments_router
-from app.api.v1.endpoints.prices import router as prices_router
-from app.api.v1.endpoints.price_history import router as price_history_router
-from app.api.v1.endpoints.portfolio import router as portfolio_router
+from app.api.v1.endpoints import investments, prices, auth, users, portfolio
 
 api_router = APIRouter()
 
+# Authentication routes (public - no auth required)
 api_router.include_router(
-    investments_router,
+    auth.router,
+    prefix="/auth",
+    tags=["authentication"]
+)
+
+# User routes (requires authentication)
+api_router.include_router(
+    users.router,
+    prefix="/users",
+    tags=["users"]
+)
+
+# Investment routes (requires authentication)
+api_router.include_router(
+    investments.router,
     prefix="/investments",
     tags=["investments"]
 )
 
+# Price routes (requires authentication)
 api_router.include_router(
-    prices_router,
+    prices.router,
     prefix="/prices",
     tags=["prices"]
 )
 
+# Portfolio routes (requires authentication)
 api_router.include_router(
-    price_history_router,
-    prefix="/price_history",
-    tags=["price_history"]
-)
-
-api_router.include_router(
-    portfolio_router,
+    portfolio.router,
     prefix="/portfolio",
     tags=["portfolio"]
 )

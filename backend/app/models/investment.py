@@ -1,8 +1,9 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Enum
+from sqlalchemy import Column, Integer, String, Float, DateTime, Enum, ForeignKey
 from sqlalchemy.orm import relationship
 import enum
 from datetime import datetime
 from app.db.base import Base
+
 
 class ItemType(str, enum.Enum):
     SKIN = "skin"
@@ -16,10 +17,14 @@ class ItemType(str, enum.Enum):
     GRAFFITI = "graffiti"
     OTHER = "other"
 
+
 class Investment(Base):
     __tablename__ = 'investments'
 
     id = Column(Integer, primary_key=True, index=True)
+
+    # User relationship - each investment belongs to a user
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
 
     item_name = Column(String, index=True, nullable=False)
     item_type = Column(Enum(ItemType), default=ItemType.SKIN, nullable=False)
@@ -34,9 +39,5 @@ class Investment(Base):
     current_price = Column(Float, nullable=True)
     price_last_updated = Column(DateTime, nullable=True)
 
-    #price_history = relationship(
-    #    "app.models.price_history.PriceHistory",
-    #    back_populates="investment",
-    #    cascade="all, delete-orphan",
-    #    lazy="select"
-    #)
+    # Relationship
+    user = relationship("User", back_populates="investments")

@@ -3,61 +3,88 @@ from typing import Optional, List
 from app.models.investment import Investment
 from app.schemas.investment import InvestmentCreate, InvestmentUpdate
 
-def get_investment(db: Session, investment_id: int) -> Optional[Investment]:
+
+def get_investment(db: Session, investment_id: int, user_id: int) -> Optional[Investment]:
     """
-    Get a single investment by ID
-    :param db: (str) Database session
-    :param investment_id: (int) Investment ID
-    :return: (Investment|None) Investment object if found, None otherwise
+    Get a single investment by ID for a specific user.
+
+    :param db: Database session
+    :param investment_id: Investment ID
+    :param user_id: User ID (for ownership verification)
+    :return: Investment object if found and owned by user, None otherwise
     """
-    return db.query(Investment).filter(Investment.id == investment_id).first()
+    return db.query(Investment).filter(
+        Investment.id == investment_id,
+        Investment.user_id == user_id
+    ).first()
+
 
 def get_investments(
         db: Session,
-        skip: int=0,
-        limit: int=100
+        user_id: int,
+        skip: int = 0,
+        limit: int = 100
 ) -> List[Investment]:
     """
-    Get all investments
-    :param db: (Session) Database session
-    :param skip: (int) Number of records to skip
-    :param limit: (int) Number of records to return
-    :return: (List[Investment]) List of all investment objects
+    Get all investments for a specific user.
+
+    :param db: Database session
+    :param user_id: User ID to filter investments
+    :param skip: Number of records to skip
+    :param limit: Number of records to return
+    :return: List of investment objects for the user
     """
-    return db.query(Investment).offset(skip).limit(limit).all()
+    return db.query(Investment).filter(
+        Investment.user_id == user_id
+    ).offset(skip).limit(limit).all()
+
 
 def create_investment(
         db: Session,
-        investment: InvestmentCreate
+        investment: InvestmentCreate,
+        user_id: int
 ) -> Investment:
     """
-    Create an investment
-    :param db: (Session) Database session
-    :param investment: (InvestmentCreate) Investment data from request
-    :return: (Investment) Investment object with IDs and timestamps
+    Create an investment for a specific user.
+
+    :param db: Database session
+    :param investment: Investment data from request
+    :param user_id: User ID to associate with investment
+    :return: Investment object with IDs and timestamps
     """
-    db_investment = Investment(**investment.model_dump())
+    # Create investment with user_id
+    db_investment = Investment(
+        **investment.model_dump(),
+        user_id=user_id
+    )
+
     db.add(db_investment)
     db.commit()
     db.refresh(db_investment)
     return db_investment
 
+
 def update_investment(
         db: Session,
         investment_id: int,
+        user_id: int,
         investment_update: InvestmentUpdate
 ) -> Optional[Investment]:
     """
-    Update an investment
-    :param db: (Session) Database session
-    :param investment_id: (int) Investment ID
-    :param investment_update: (InvestmentUpdate) Investment data from request
-    :return: (Investment|None) Investment object if found, None otherwise
+    Update an investment (with ownership verification).
+
+    :param db: Database session
+    :param investment_id: Investment ID
+    :param user_id: User ID (for ownership verification)
+    :param investment_update: Investment data from request
+    :return: Investment object if found and updated, None otherwise
     """
-    db_investment = get_investment(db, investment_id)
+    # Get investment with ownership check
+    db_investment = get_investment(db, investment_id, user_id)
     if db_investment is None:
         return None
 
+    # Update fields
     update_data = investment_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(db_investment, field, value)
@@ -66,17 +93,32 @@ def update_investment(
     db.refresh(db_investment)
     return db_investment
 
-def delete_investment(db: Session, investment_id: int) -> bool:
+
+def delete_investment(db: Session, investment_id: int, user_id: int) -> bool:
     """
-    Delete an investment by ID
-    :param db: (Session) Database session
-    :param investment_id: (int) Investment ID
-    :return: (bool) True if deleted, False otherwise
+    Delete an investment (with ownership verification).
+
+    :param db: Database session
+    :param investment_id: Investment ID
+    :param user_id: User ID (for ownership verification)
+    :return: True if deleted, False otherwise
     """
-    db_investment = get_investment(db, investment_id)
+    # Get investment with ownership check
+    db_investment = get_investment(db, investment_id, user_id)
     if db_investment is None:
         return False
 
     db.delete(db_investment)
     db.commit()
     return True
+
+
+def get_investment_count(db: Session, user_id: int) -> int:
+    """
+    Get total count of investments for a user.
+
+    :param db: Database session
+    :param user_id: User ID
+    :return: Count of investments
+    """
+    return db.query(Investment).filter(Investment.user_id == user_id).count()

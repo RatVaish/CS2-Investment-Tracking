@@ -1,103 +1,74 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from typing import List, Optional
-from datetime import datetime, timedelta
-from collections import defaultdict
+from typing import Optional
 
-from app.api.deps import get_db
+from app.api.deps import get_db, get_current_user
+from app.models.user import User
 from app.models.investment import Investment
-from app.models.price_history import PriceHistory
 
 router = APIRouter()
 
 
-@router.get("/value-history")
-def get_portfolio_value_history(
-        days: Optional[int] = Query(30, description="Number of days to look back"),
+@router.get("/summary")
+def get_portfolio_summary(
+        current_user: User = Depends(get_current_user),
         db: Session = Depends(get_db)
 ):
     """
-    Get portfolio value over time
+    Get portfolio summary statistics for the authenticated user.
 
-    Calculates total portfolio value at each point in time based on:
-    - Investment quantities
-    - Historical prices
-
-    :param days: Number of days of history to return (default 30)
+    :param current_user: Current authenticated user
     :param db: Database session
-    :return: List of {timestamp, value} data points
+    :return: Portfolio summary with totals and statistics
     """
-
-    # Get all investments with their quantities
-    investments = db.query(Investment).all()
+    # Get all investments for this user
+    investments = db.query(Investment).filter(
+        Investment.user_id == current_user.id
+    ).all()
 
     if not investments:
-        return []
+        return {
+            "total_investments": 0,
+            "total_invested": 0.0,
+            "current_value": 0.0,
+            "total_profit_loss": 0.0,
+            "roi_percentage": 0.0
+        }
 
-    # Get price history for all investments
-    investment_ids = [inv.id for inv in investments]
+    total_invested = sum(inv.purchase_price * inv.quantity for inv in investments)
+    current_value = sum(
+        (inv.current_price or inv.purchase_price) * inv.quantity
+        for inv in investments
+    )
+    total_profit_loss = current_value - total_invested
+    roi_percentage = (total_profit_loss / total_invested * 100) if total_invested > 0 else 0.0
 
-    # Calculate cutoff date
-    cutoff_date = datetime.utcnow() - timedelta(days=days) if days else None
-
-    # Query price history
-    query = db.query(PriceHistory).filter(PriceHistory.investment_id.in_(investment_ids))
-    if cutoff_date:
-        query = query.filter(PriceHistory.timestamp >= cutoff_date)
-
-    price_history = query.order_by(PriceHistory.timestamp).all()
-
-    # Group by timestamp to calculate portfolio value at each point
-    # Key: timestamp, Value: dict of {investment_id: price}
-    timeline = defaultdict(dict)
-
-    for record in price_history:
-        # Round timestamp to nearest hour for grouping
-        timestamp_key = record.timestamp.replace(minute=0, second=0, microsecond=0)
-        timeline[timestamp_key][record.investment_id] = record.price
-
-    # Calculate portfolio value at each timestamp
-    result = []
-
-    # Keep track of last known price for each investment
-    last_known_prices = {}
-
-    for timestamp in sorted(timeline.keys()):
-        prices_at_time = timeline[timestamp]
-
-        # Update last known prices
-        last_known_prices.update(prices_at_time)
-
-        # Calculate total portfolio value
-        total_value = 0
-        for inv in investments:
-            if inv.id in last_known_prices:
-                total_value += last_known_prices[inv.id] * inv.quantity
-            else:
-                # Use purchase price if no history yet
-                total_value += inv.purchase_price * inv.quantity
-
-        result.append({
-            "timestamp": timestamp.isoformat(),
-            "value": round(total_value, 2)
-        })
-
-    return result
+    return {
+        "total_investments": len(investments),
+        "total_invested": round(total_invested, 2),
+        "current_value": round(current_value, 2),
+        "total_profit_loss": round(total_profit_loss, 2),
+        "roi_percentage": round(roi_percentage, 2)
+    }
 
 
 @router.get("/top-performers")
 def get_top_performers(
         limit: int = Query(3, description="Number of top/bottom performers to return"),
+        current_user: User = Depends(get_current_user),
         db: Session = Depends(get_db)
 ):
     """
-    Get top gaining and losing investments based on price change
+    Get top gaining and losing investments for the authenticated user based on price change.
 
     :param limit: Number of top/bottom items to return (default 3)
+    :param current_user: Current authenticated user
     :param db: Database session
     :return: Dict with 'gainers' and 'losers' lists
     """
-    investments = db.query(Investment).all()
+    investments = db.query(Investment).filter(
+        Investment.user_id == current_user.id
+    ).all()
 
     performers = []
 
@@ -123,8 +94,8 @@ def get_top_performers(
     performers.sort(key=lambda x: x['price_change_pct'], reverse=True)
 
     # Get top gainers and losers
-    gainers = performers[:limit]
-    losers = performers[-limit:][::-1]  # Reverse to show biggest losers first
+    gainers = performers[:limit] if performers else []
+    losers = performers[-limit:][::-1] if len(performers) >= limit else []
 
     return {
         'gainers': gainers,
