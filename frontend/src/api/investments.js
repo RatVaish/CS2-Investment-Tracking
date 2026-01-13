@@ -1,69 +1,45 @@
-import apiClient from "./client";
+import client from './client';
 
-export const investmentAPI = {
-    getAll: async (skip = 0, limit = 100) => {
-        console.log('Getting all investments...');
-        const response = await apiClient.get("/investments/",{
-            params: {skip, limit}
-        });
-        console.log('Got investments:', response.data);
-        return response.data;
-    } ,
+export const investmentsAPI = {
+  // Get all investments
+  getAll: async () => {
+    const response = await client.get('/investments/');
+    return response.data;
+  },
 
-    getById: async (id) => {
-        const response = await apiClient.post(`/investments/${id}`);
-        return response.data;
-    },
+  // Get single investment
+  getById: async (id) => {
+    const response = await client.get(`/investments/${id}`);
+    return response.data;
+  },
 
-    create: async (data) => {
-        console.log('Creating investment with data:', data);
-        try {
-            const response = await apiClient.post('/investments/', data);
-            console.log('Investment created successfully:', response.data);
-            return response.data;
-        } catch (error) {
-            console.error('Error creating investment:', error);
-            console.error('Error response:', error.response);
-            throw error;
-        }
-    },
+  // Create new investment
+  create: async (investmentData) => {
+    const response = await client.post('/investments/', investmentData);
+    return response.data;
+  },
 
-    update: async (id, data) => {
-        const response = await apiClient.patch(`/investments/${id}`, data);
-        return response.data;
-    },
+  // Update investment
+  update: async (id, investmentData) => {
+    const response = await client.patch(`/investments/${id}`, investmentData);
+    return response.data;
+  },
 
-    delete: async (id) => {
-        await apiClient.delete(`/investments/${id}`)
-    },
+  // Delete investment
+  delete: async (id) => {
+    const response = await client.delete(`/investments/${id}`);
+    return response.data;
+  },
 
-    refreshPrice: async (id) => {
-        const response = await apiClient.post(`/prices/refresh/${id}`);
-        return response.data;
-    },
+  // Refresh single price
+  refreshPrice: async (id) => {
+    const response = await client.post(`/prices/refresh/${id}`);
+    return response.data;
+  },
 
-    refreshAllPrices: async () => {
-        const response = await apiClient.post('/prices/refresh-all');
-        return response.data;
-    },
-
-    getPriceHistory: async (id, days = null) => {
-        const params = days ? { days } : {};
-        const response = await apiClient.get(`/price_history/${id}`, { params });
-        return response.data;
-    },
-
-    getPortfolioValueHistory: async (days = 30) => {
-        const response = await apiClient.get('/portfolio/value-history', {
-            params: { days }
-        });
-        return response.data;
-    },
-
-    getTopPerformers: async (limit = 3) => {
-        const response = await apiClient.get('/portfolio/top-performers', {
-            params: { limit }
-        });
-        return response.data;
-    },
+  // Refresh all prices
+  refreshAllPrices: async () => {
+    const response = await client.post('/prices/refresh-all');
+    return response.data;
+  }
 };

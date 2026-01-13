@@ -1,22 +1,37 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import TabLayout from './components/TabLayout';
-import Home from './pages/Home';
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './contexts/AuthContext';
+import Landing from './pages/Landing';
 import Dashboard from './pages/Dashboard';
-import Manage from './pages/Manage';
-import Portfolio from './pages/Portfolio';
 
 function App() {
+  const { isAuthenticated, loading } = useAuth();
+
+  // Show loading screen while checking auth
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-white text-xl">Loading...</div>
+      </div>
+    );
+  }
+
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<TabLayout />}>
-          <Route index element={<Home />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="manage" element={<Manage />} />
-          <Route path="portfolio" element={<Portfolio />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <Routes>
+      {/* Public route */}
+      <Route path="/" element={<Landing />} />
+
+      {/* Protected route */}
+      <Route
+        path="/app/*"
+        element={
+          isAuthenticated ? <Dashboard /> : <Navigate to="/" replace />
+        }
+      />
+
+      {/* Catch all - redirect to home */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 

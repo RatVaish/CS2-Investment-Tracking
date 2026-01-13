@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Gray theme */
+* {
+  color-scheme: light;
+}
+
+body {
+  background-color: #111827;
+  color: #f9fafb;
+}
