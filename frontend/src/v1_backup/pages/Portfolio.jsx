@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { investmentAPI } from '../api/investments';
-import PriceHistoryModal from '../components/PriceHistoryModal';
-import EditInvestmentModal from '../components/EditInvestmentModal';
+import { investmentAPI } from '../api/investments.js';
+import PriceHistoryModal from '../components/PriceHistoryModal.jsx';
+import EditInvestmentModal from '../components/EditInvestmentModal.jsx';
 
 function Portfolio() {
   const [investments, setInvestments] = useState([]);

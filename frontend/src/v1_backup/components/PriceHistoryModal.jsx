@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { investmentAPI } from "../api/investments";
+import { investmentAPI } from "../api/investments.js";
 
 function PriceHistoryModal({ investment, onClose }) {
     const [history, setHistory] = useState([]);

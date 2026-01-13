@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import AddInvestmentForm from '../components/AddInvestmentForm';
+import AddInvestmentForm from '../components/AddInvestmentForm.jsx';
 
 function Manage() {
   const navigate = useNavigate();

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { investmentAPI } from '../api/investments';
+import { investmentAPI } from '../api/investments.js';
 
 function EditInvestmentModal({ investment, onClose, onUpdated }) {
   const [formData, setFormData] = useState({

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { investmentAPI } from '../api/investments';
+import { investmentAPI } from '../api/investments.js';
 
 function AddInvestmentForm({ onInvestmentAdded }) {
   const [formData, setFormData] = useState({
