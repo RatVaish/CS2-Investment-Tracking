@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+// Use environment variable or fallback to localhost
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+
 const client = axios.create({
-  baseURL: 'http://192.168.1.232:8000/api/v1',
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -33,11 +36,10 @@ client.interceptors.response.use(
 
       try {
         const refreshToken = localStorage.getItem('refresh_token');
-
         if (refreshToken) {
-          // Try to refresh the token
+          // Try to refresh the token using the base URL
           const response = await axios.post(
-            'http://localhost:8000/api/v1/auth/refresh',
+            `${API_BASE_URL}/auth/refresh`,
             { refresh_token: refreshToken }
           );
 
