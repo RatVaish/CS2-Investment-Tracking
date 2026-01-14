@@ -21,37 +21,74 @@ class PriceUpdater:
 
     def update_csfloat_prices(self):
         """
-        Update CSFloat prices for ALL active items and record hourly data point
-        Runs every hour
+        Update CSFloat prices for ALL active items using bulk price-list endpoint
+        Records hourly data points. Runs every 30 minutes.
         """
         logger.info("Starting CSFloat price update for all items")
 
-        # Get ALL active items (not just a batch)
-        items = self.item_manager.get_all_active_items()
+        try:
+            # Get full price list from CSFloat (ONE API call for everything!)
+            price_data = self.csfloat.get_price_list()
+            
+            if not price_data:
+                logger.error("Failed to fetch CSFloat price list")
+                return
 
-        if not items:
-            logger.info("No active items to update")
-            return
+            logger.info(f"Fetched {len(price_data)} items from CSFloat")
 
-        updated_count = 0
+            # Create price map
+            price_map = {item["market_hash_name"]: item for item in price_data}
 
-        for item in items:
-            try:
-                price_data = self.csfloat.get_item_price(item.market_hash_name)
+            # Get all active items
+            items = self.item_manager.get_all_active_items()
+            
+            if not items:
+                logger.info("No active items to update")
+                return
 
-                if price_data:
-                    # Update current price in item_prices table
-                    self._update_item_price(item.id, 'csfloat', price_data)
+            updated_count = 0
+            skipped_count = 0
 
-                    # Record hourly price point in price_history
-                    self._record_hourly_price(item.id, 'csfloat', price_data)
+            for item in items:
+                try:
+                    # Find price in the bulk data
+                    price_info = price_map.get(item.market_hash_name)
+                    
+                    if not price_info:
+                        skipped_count += 1
+                        continue
+
+                    # Convert to our format
+                    formatted_price = {
+                        'price': price_info['min_price'] / 100.0,  # cents to dollars
+                        'volume': price_info.get('qty', 0),
+                        'updated_at': datetime.utcnow()
+                    }
+
+                    # Update current price
+                    self._update_item_price(item.id, 'csfloat', formatted_price)
+
+                    # Record hourly price point
+                    self._record_hourly_price(item.id, 'csfloat', formatted_price)
 
                     updated_count += 1
 
-            except Exception as e:
-                logger.error(f"Failed to update CSFloat price for {item.market_hash_name}: {e}")
+                    # Commit every 1000 items
+                    if updated_count % 1000 == 0:
+                        self.db.commit()
+                        logger.info(f"Progress: {updated_count} updated, {skipped_count} skipped")
 
-        logger.info(f"Updated CSFloat prices for {updated_count}/{len(items)} items")
+                except Exception as e:
+                    logger.error(f"Failed to update price for {item.market_hash_name}: {e}")
+
+            self.db.commit()
+            logger.info(f"CSFloat update complete: {updated_count} updated, {skipped_count} skipped")
+
+        except Exception as e:
+            logger.error(f"CSFloat price update failed: {e}")
+            self.db.rollback()
+        finally:
+            self.csfloat.close()
 
     def update_buff_prices(self):
         """Update Buff163 prices for all items"""
@@ -85,7 +122,6 @@ class PriceUpdater:
         if source == 'csfloat':
             item_price.csfloat_price = price_data.get('price')
             item_price.csfloat_volume = price_data.get('volume')
-            item_price.csfloat_lowest_listing = price_data.get('lowest_listing')
             item_price.csfloat_updated_at = price_data.get('updated_at', datetime.utcnow())
         elif source == 'buff':
             item_price.buff_price = price_data.get('price')
@@ -97,11 +133,10 @@ class PriceUpdater:
             item_price.steam_updated_at = price_data.get('updated_at', datetime.utcnow())
 
         item_price.last_updated = datetime.utcnow()
-        self.db.commit()
 
     def _record_hourly_price(self, item_id: int, source: str, price_data: dict):
         """
-        Record hourly price point in price_history
+        Record hourly price point in price_history with OHLC tracking
 
         Args:
             item_id: Item ID
@@ -114,38 +149,39 @@ class PriceUpdater:
         if not price:
             return
 
-        # Check if we already have an hourly record for this hour
+        # Check if we have an hourly record for today
         existing = self.db.query(PriceHistory).filter(
             PriceHistory.item_id == item_id,
             PriceHistory.source == source,
             PriceHistory.date == today,
-            PriceHistory.resolution == 'hourly',
-            PriceHistory.created_at >= datetime.utcnow() - timedelta(hours=1)
+            PriceHistory.resolution == 'hourly'
         ).first()
 
-        if existing:
-            return  # Already have a record for this hour
-
-        # Create hourly price record (all OHLC values same for now)
-        price_history = PriceHistory(
-            item_id=item_id,
-            source=source,
-            date=today,
-            resolution='hourly',
-            open_price=price,
-            high_price=price,
-            low_price=price,
-            close_price=price,
-            volume=price_data.get('volume', 0)
-        )
-
-        self.db.add(price_history)
-        self.db.commit()
+        if not existing:
+            # Create new hourly record
+            price_history = PriceHistory(
+                item_id=item_id,
+                source=source,
+                date=today,
+                resolution='hourly',
+                open_price=price,
+                high_price=price,
+                low_price=price,
+                close_price=price,
+                volume=price_data.get('volume', 0)
+            )
+            self.db.add(price_history)
+        else:
+            # Update existing OHLC candle
+            existing.high_price = max(existing.high_price or price, price)
+            existing.low_price = min(existing.low_price or price, price)
+            existing.close_price = price
+            existing.volume = price_data.get('volume', 0)
 
     def compress_old_hourly_data(self):
         """
         Compress hourly data older than 30 days into daily OHLC candlesticks
-        Runs daily
+        Runs daily at midnight
         """
         logger.info("Starting hourly data compression")
 
@@ -171,7 +207,7 @@ class PriceUpdater:
                     PriceHistory.source == source,
                     PriceHistory.date == date_to_compress,
                     PriceHistory.resolution == 'hourly'
-                ).all()
+                ).order_by(PriceHistory.created_at.asc()).all()
 
                 if not hourly_records:
                     continue
@@ -202,7 +238,7 @@ class PriceUpdater:
                         high_price=max(prices),
                         low_price=min(prices),
                         close_price=hourly_records[-1].close_price,
-                        volume=sum(volumes) if volumes else 0
+                        volume=max(volumes) if volumes else 0  # Use max volume, not sum
                     )
 
                     self.db.add(daily_candle)
@@ -212,6 +248,11 @@ class PriceUpdater:
                     self.db.delete(record)
 
                 compressed_count += 1
+
+                # Commit every 100 compressions
+                if compressed_count % 100 == 0:
+                    self.db.commit()
+                    logger.info(f"Compressed {compressed_count} days so far...")
 
             except Exception as e:
                 logger.error(f"Failed to compress data for item {item_id} date {date_to_compress}: {e}")
@@ -240,7 +281,7 @@ class PriceUpdater:
             PriceHistory.source == source,
             PriceHistory.date >= thirty_days_ago,
             PriceHistory.resolution == 'hourly'
-        ).order_by(PriceHistory.date.asc(), PriceHistory.created_at.asc()).all()
+        ).order_by(PriceHistory.date.asc()).all()
 
         # Get daily data for older than 30 days
         old_daily = self.db.query(PriceHistory).filter(

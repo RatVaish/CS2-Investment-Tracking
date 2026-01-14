@@ -37,6 +37,7 @@ services:
       VERSION: 2.0.0
       DEBUG: ${DEBUG:-False}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      CSFLOAT_API_KEY: ${CSFLOAT_API_KEY}
     volumes:
       - ./backend/public:/app/public
     ports:

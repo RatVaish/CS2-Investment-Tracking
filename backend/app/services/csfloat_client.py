@@ -3,6 +3,7 @@ import logging
 from typing import Optional, Dict
 from datetime import datetime
 import time
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -12,19 +13,19 @@ class CSFloatClient:
     BASE_URL = "https://csfloat.com/api/v1"
 
     def __init__(self):
+        if not settings.CSFLOAT_API_KEY:
+            raise ValueError("CSFLOAT_API_KEY not found in environment variables")
+        
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'application/json',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Referer': 'https://csfloat.com/',
-            'Origin': 'https://csfloat.com'
+            'Authorization': settings.CSFLOAT_API_KEY,  # Just the raw key, no Bearer
+            'User-Agent': 'CS2InvestmentTracker/1.0'
         }
         self.client = httpx.Client(timeout=30.0, headers=headers, follow_redirects=True)
 
     def get_item_price(self, market_hash_name: str) -> Optional[Dict]:
         """
         Get reference price for an item from CSFloat.
-        Uses the base_price from reference data, not individual listing prices.
+        Uses the base_price from reference data.
         """
         try:
             time.sleep(1)  # Rate limiting
@@ -33,58 +34,44 @@ class CSFloatClient:
                 f"{self.BASE_URL}/listings",
                 params={
                     "market_hash_name": market_hash_name,
-                    "limit": 1,  # We only need one listing to get reference data
-                    "sort_by": "price",
+                    "limit": 1,
+                    "sort_by": "lowest_price",
                     "type": "buy_now"
                 }
             )
             response.raise_for_status()
             data = response.json()
 
-            if not data.get('data'):
+            if not isinstance(data, list) or not data:
                 logger.warning(f"No listings found for {market_hash_name}")
                 return None
 
             # Get first listing
-            first_listing = data['data'][0]
+            first_listing = data[0]
+            item = first_listing.get('item', {})
             
-            # Extract reference data (this is the market standard price)
-            reference = first_listing.get('reference', {})
-            
-            if not reference:
-                logger.warning(f"No reference data for {market_hash_name}")
-                return None
-            
-            base_price = reference.get('base_price')
-            quantity = reference.get('quantity', 0)
-            last_updated_str = reference.get('last_updated')
-            
-            if base_price is None:
-                logger.warning(f"No base_price in reference for {market_hash_name}")
-                return None
-            
-            # Parse last_updated timestamp
-            reference_updated_at = None
-            if last_updated_str:
-                try:
-                    reference_updated_at = datetime.fromisoformat(last_updated_str.replace('Z', '+00:00'))
-                except Exception as e:
-                    logger.warning(f"Could not parse last_updated: {e}")
-            
-            # Get actual listing price for comparison
+            # Get listing price
             listing_price = first_listing.get('price', 0)
             
+            # Try to get Steam Community Market data if available
+            scm = item.get('scm', {})
+            scm_price = scm.get('price', 0) if scm else 0
+            
             return {
-                "price": base_price / 100.0,  # Convert cents to dollars
-                "volume": quantity,
-                "lowest_listing": listing_price / 100.0,  # Actual cheapest listing
-                "reference_updated_at": reference_updated_at,
+                "price": listing_price / 100.0,  # Convert cents to dollars
+                "scm_price": scm_price / 100.0 if scm_price else None,
+                "float_value": item.get('float_value'),
+                "market_hash_name": item.get('market_hash_name'),
                 "updated_at": datetime.utcnow()
             }
 
         except httpx.HTTPStatusError as e:
-            if e.response.status_code == 403:
-                logger.error(f"CSFloat blocked request (403) for {market_hash_name}")
+            if e.response.status_code == 401:
+                logger.error(f"CSFloat authentication failed - check API key")
+            elif e.response.status_code == 403:
+                logger.error(f"CSFloat access forbidden for {market_hash_name}")
+            elif e.response.status_code == 404:
+                logger.error(f"CSFloat endpoint not found - URL might be incorrect")
             else:
                 logger.error(f"CSFloat HTTP {e.response.status_code} for {market_hash_name}: {e}")
             return None
@@ -93,6 +80,19 @@ class CSFloatClient:
             return None
         except Exception as e:
             logger.error(f"Unexpected error fetching price for {market_hash_name}: {e}")
+            return None
+
+    def get_price_list(self) -> Optional[Dict]:
+        """
+        Get the full price list from CSFloat.
+        This might be better for bulk price updates.
+        """
+        try:
+            response = self.client.get(f"{self.BASE_URL}/listings/price-list")
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Error fetching price list: {e}")
             return None
 
     def close(self):
