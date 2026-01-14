@@ -1,30 +1,27 @@
-from pydantic_settings import BaseSettings
-from pathlib import Path
+import os
 from dotenv import load_dotenv
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-ENV_FILE = BASE_DIR / ".env"
+load_dotenv()
 
-load_dotenv(ENV_FILE)
 
-class Settings(BaseSettings):
-    DATABASE_URL: str
-    PROJECT_NAME: str = "CS Investment Tracker"
-    DEBUG: bool = True
-    SECRET_KEY: str
+class Settings:
+    PROJECT_NAME: str = "CS2 Investment Tracker"
+    VERSION: str = "2.0.0"
+    DESCRIPTION: str = "Track your Counter-Strike 2 item investments with real-time pricing"
 
-    # JWT Authentication
-    JWT_SECRET_KEY: str = "your-super-secret-jwt-key-change-this-in-production"
+    DEBUG: bool = os.getenv("DEBUG", "False") == "True"
+
+    # Database
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost/cs_investments")
+
+    # JWT
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-this")
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # Steam Integration (optional - can be added later)
-    STEAM_API_KEY: str = ""
-    STEAM_OPENID_REALM: str = "http://localhost:5173"
-    STEAM_OPENID_RETURN_URL: str = "http://localhost:8000/api/v1/auth/steam/callback"
+    # CORS
+    ALLOWED_ORIGINS: list = ["http://localhost:5173"]
 
-    class Config:
-        case_sensitive = False
 
 settings = Settings()

@@ -1,93 +1,129 @@
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
-from app.services.price_service import update_investment_price
-from app.crud.investment import get_investment
-from app.models.investment import Investment
+from app.schemas.price import ItemPrice, PriceHistory, PriceHistoryResponse
+from app.crud import price as crud_price
+from app.services.price_updater import PriceUpdater
 
 router = APIRouter()
 
 
-@router.post("/refresh/{investment_id}")
-def refresh_single_price(
-        investment_id: int,
-        current_user: User = Depends(get_current_user),
-        db: Session = Depends(get_db)
+@router.post("/refresh/{item_id}")
+def refresh_item_price(
+        item_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
     """
-    Refresh price for a single investment (must be owned by authenticated user).
-
-    :param investment_id: ID of investment to refresh
-    :param current_user: Current authenticated user
-    :param db: Database session
-    :return: Update result
-    :raises HTTPException: 404 if investment not found or not owned by user
+    Manually refresh price for a specific item
     """
+    updater = PriceUpdater(db)
+
+    from app.crud import item as crud_item
+    item = crud_item.get_item(db, item_id)
+
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
     try:
-        # Get investment with ownership check
-        investment = get_investment(db, investment_id, user_id=current_user.id)
+        price_data = updater.csfloat.get_item_price(item.market_hash_name)
 
-        if not investment:
-            raise HTTPException(status_code=404, detail="Investment not found")
+        if price_data:
+            updater._update_item_price(item_id, 'csfloat', price_data)
+            updater._record_hourly_price(item_id, 'csfloat', price_data)
 
-        result = update_investment_price(db, investment)
-
-        if result['success']:
             return {
-                "message": result['message'],
-                "investment_id": investment_id,
-                "current_price": investment.current_price,
-                "last_updated": investment.price_last_updated
+                "message": "Price updated successfully",
+                "item_id": item_id,
+                "price": price_data.get('price')
             }
         else:
-            return {
-                "message": result['message'],
-                "investment_id": investment_id,
-                "success": False
-            }
-    except HTTPException:
-        raise
+            raise HTTPException(status_code=404, detail="Price not available for this item")
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update price: {str(e)}")
 
 
 @router.post("/refresh-all")
 def refresh_all_prices(
-        current_user: User = Depends(get_current_user),
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
     """
-    Refresh prices for all investments belonging to the authenticated user.
-
-    :param current_user: Current authenticated user
-    :param db: Database session
-    :return: Summary of updates
+    Manually trigger price refresh for all user's investments
     """
-    # Get all investments for this user
-    investments = db.query(Investment).filter(
-        Investment.user_id == current_user.id
-    ).all()
+    from app.crud import investment as crud_investment
 
-    total = len(investments)
-    updated = 0
-    failed = 0
-    rate_limited = 0
+    investments = crud_investment.get_investments(db, user_id=current_user.id)
+
+    if not investments:
+        return {"message": "No investments to update"}
+
+    updater = PriceUpdater(db)
+    updated_count = 0
 
     for investment in investments:
-        result = update_investment_price(db, investment)
-        if result['success']:
-            updated += 1
-        else:
-            if 'rate limited' in result['message'].lower():
-                rate_limited += 1
-            failed += 1
+        try:
+            from app.crud import item as crud_item
+            item = crud_item.get_item(db, investment.item_id)
+
+            if item:
+                price_data = updater.csfloat.get_item_price(item.market_hash_name)
+
+                if price_data:
+                    updater._update_item_price(investment.item_id, 'csfloat', price_data)
+                    updater._record_hourly_price(investment.item_id, 'csfloat', price_data)
+                    updated_count += 1
+
+        except Exception as e:
+            continue  # Skip failed items
 
     return {
-        "message": f"Updated {updated}/{total} prices. {rate_limited} rate limited.",
-        "total": total,
-        "updated": updated,
-        "failed": failed,
-        "rate_limited": rate_limited
+        "message": f"Updated {updated_count}/{len(investments)} prices successfully",
+        "updated": updated_count,
+        "total": len(investments)
+    }
+
+
+@router.get("/{item_id}", response_model=ItemPrice)
+def get_item_price(
+        item_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    """
+    Get current price for an item
+    """
+    price = crud_price.get_item_price(db, item_id)
+
+    if not price:
+        raise HTTPException(status_code=404, detail="Price not found for this item")
+
+    return price
+
+
+@router.get("/{item_id}/history", response_model=PriceHistoryResponse)
+def get_price_history(
+        item_id: int,
+        source: str = "csfloat",
+        days: int = 30,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    """
+    Get price history for an item
+    """
+    history = crud_price.get_price_history(
+        db,
+        item_id=item_id,
+        source=source,
+        days=days
+    )
+
+    return {
+        "item_id": item_id,
+        "source": source,
+        "data": history
     }

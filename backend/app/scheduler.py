@@ -1,61 +1,116 @@
 from apscheduler.schedulers.background import BackgroundScheduler
-from app.services.price_service import update_all_prices
+from apscheduler.triggers.cron import CronTrigger
+from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
-from datetime import datetime
+from app.services.price_updater import PriceUpdater
+import logging
 
-def scheduled_price_update():
-    """
-    Run automatic price updates for all investments
-    in the background for all investments.
-    """
+logger = logging.getLogger(__name__)
 
-    print(f"\n{'=' * 60}")
-    print(f"🔄 Starting scheduled price update at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"{'=' * 60}\n")
+scheduler = BackgroundScheduler()
 
+
+def update_csfloat_prices():
+    """Update CSFloat prices for ALL items (runs every 30 minutes)"""
+    logger.info("Starting CSFloat price update job")
     db = SessionLocal()
     try:
-        result = update_all_prices(db)
-        print(f"\n{'=' * 60}")
-        print(f"✅ Scheduled update complete!")
-        print(f"   Total: {result['total']} items")
-        print(f"   Updated: {result['updated']} items")
-        print(f"   Failed: {result['failed']} items")
-        print(f"   Rate Limited: {result['rate_limited']} items")
-        print(f"   Next update in 1 hour")
-        print(f"{'=' * 60}\n")
+        updater = PriceUpdater(db)
+        updater.update_csfloat_prices()
+        logger.info("CSFloat price update completed")
     except Exception as e:
-        print(f"\n{'=' * 60}")
-        print(f"❌ Scheduled update failed: {str(e)}")
-        print(f"{'=' * 60}\n")
+        logger.error(f"CSFloat price update failed: {e}")
+    finally:
+        db.close()
+
+
+def update_buff_prices():
+    """Update Buff prices for ALL items (runs every 30 minutes)"""
+    logger.info("Starting Buff price update job")
+    db = SessionLocal()
+    try:
+        updater = PriceUpdater(db)
+        updater.update_buff_prices()
+        logger.info("Buff price update completed")
+    except Exception as e:
+        logger.error(f"Buff price update failed: {e}")
+    finally:
+        db.close()
+
+
+def update_steam_prices():
+    """Update Steam prices for ALL items (runs weekly)"""
+    logger.info("Starting Steam price update job")
+    db = SessionLocal()
+    try:
+        updater = PriceUpdater(db)
+        updater.update_steam_prices()
+        logger.info("Steam price update completed")
+    except Exception as e:
+        logger.error(f"Steam price update failed: {e}")
+    finally:
+        db.close()
+
+
+def compress_old_hourly_data():
+    """Compress hourly data older than 30 days into daily candles (runs daily at midnight)"""
+    logger.info("Starting hourly data compression")
+    db = SessionLocal()
+    try:
+        updater = PriceUpdater(db)
+        updater.compress_old_hourly_data()
+        logger.info("Hourly data compression completed")
+    except Exception as e:
+        logger.error(f"Hourly data compression failed: {e}")
     finally:
         db.close()
 
 
 def start_scheduler():
-    """
-    Initialize and start the background scheduler
-    Runs price updates every hour
-    """
-    scheduler = BackgroundScheduler()
+    """Initialize and start all scheduled jobs"""
 
-    # Schedule price updates every hour
-    # You can adjust the interval by changing 'hours=1'
+    # CSFloat prices - every 30 minutes
     scheduler.add_job(
-        scheduled_price_update,
+        update_csfloat_prices,
         'interval',
-        hours=1,  # Run every hour
-        id='price_update_job',
-        name='Update all investment prices',
+        minutes=30,
+        id='update_csfloat_prices',
+        replace_existing=True
+    )
+
+    # Buff prices - every 30 minutes (offset by 15 min from CSFloat)
+    scheduler.add_job(
+        update_buff_prices,
+        'interval',
+        minutes=30,
+        id='update_buff_prices',
+        replace_existing=True,
+        next_run_time=None  # Start immediately, then every 30 min
+    )
+
+    # Steam prices - weekly on Monday at 3 AM UTC
+    scheduler.add_job(
+        update_steam_prices,
+        CronTrigger(day_of_week='mon', hour=3, minute=0),
+        id='update_steam_prices',
+        replace_existing=True
+    )
+
+    # Compress old hourly data - daily at midnight UTC
+    scheduler.add_job(
+        compress_old_hourly_data,
+        CronTrigger(hour=0, minute=0),
+        id='compress_old_hourly_data',
         replace_existing=True
     )
 
     scheduler.start()
-    print("\n" + "=" * 60)
-    print("📅 Price Update Scheduler Started!")
-    print("   Frequency: Every 1 hour")
-    print("   Status: Active")
-    print("   Note: Prices will update automatically while backend is running")
-    print("=" * 60 + "\n")
+    logger.info("Scheduler started with all jobs")
 
-    return scheduler
+
+def stop_scheduler():
+    """Stop the scheduler gracefully"""
+    if scheduler.running:
+        scheduler.shutdown()
+        logger.info("Scheduler stopped")
+        
