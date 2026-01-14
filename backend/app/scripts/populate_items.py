@@ -1,6 +1,5 @@
 """
-Populate ALL CS2 items from ByMykel/CSGO-API with FULL metadata
-Uses detailed endpoints to get collections, rarity, crates, etc.
+Populate ALL CS2 items with full metadata using multiple endpoints
 """
 
 import sys
@@ -31,6 +30,22 @@ def download_json(endpoint):
         logger.error(f"  ❌ Failed: {e}")
         return []
 
+def build_collection_map():
+    """Build map of skin_id -> collection from skins.json (grouped version)"""
+    logger.info("\n📚 Building collection map from skins.json...")
+    skins_grouped = download_json("skins.json")
+    
+    collection_map = {}
+    for skin in skins_grouped:
+        skin_id = skin.get('id')
+        collections = skin.get('collections', [])
+        if skin_id and collections:
+            # Take first collection
+            collection_map[skin_id] = collections[0].get('name')
+    
+    logger.info(f"  ✅ Mapped {len(collection_map)} skins to collections")
+    return collection_map
+
 def parse_item_name(market_hash_name: str) -> dict:
     """Parse market hash name into components"""
     name = market_hash_name
@@ -51,7 +66,6 @@ def parse_item_name(market_hash_name: str) -> dict:
             clean_name = clean_name.replace(f"({wear_opt})", "").strip()
             break
     
-    # Determine type
     if name.startswith("Sticker"):
         item_type = "sticker"
         skin_name = clean_name.replace("Sticker | ", "").replace("Sticker", "").strip()
@@ -98,25 +112,12 @@ def parse_item_name(market_hash_name: str) -> dict:
         "is_souvenir": is_souvenir
     }
 
-def extract_metadata(item_data):
-    """Extract collection, rarity, and other metadata from item data"""
-    metadata = {}
-    
-    # Collections - take first one if exists
-    collections = item_data.get('collections', [])
-    if collections:
-        metadata['collection'] = collections[0].get('name')
-    
-    # Rarity
-    rarity = item_data.get('rarity', {})
-    if rarity:
-        metadata['rarity'] = rarity.get('name')
-    
-    return metadata
-
 def populate():
     """Populate database with full metadata"""
-    logger.info("🚀 Starting comprehensive item population with metadata...")
+    logger.info("🚀 Starting comprehensive item population...")
+    
+    # Build collection map FIRST
+    collection_map = build_collection_map()
     
     db = SessionLocal()
     item_manager = ItemManager(db)
@@ -124,8 +125,8 @@ def populate():
     all_items = []
     
     try:
-        # 1. SKINS (not grouped - includes all wears)
-        logger.info("\n📦 Downloading skins...")
+        # 1. SKINS (not grouped - includes all wears + rarity)
+        logger.info("\n📦 Downloading skins_not_grouped.json...")
         skins = download_json("skins_not_grouped.json")
         for skin in skins:
             market_hash_name = skin.get('market_hash_name')
@@ -133,13 +134,20 @@ def populate():
                 continue
             
             parsed = parse_item_name(market_hash_name)
-            metadata = extract_metadata(skin)
+            
+            # Get collection from map using skin_id
+            skin_id = skin.get('skin_id')
+            collection = collection_map.get(skin_id)
+            
+            # Get rarity
+            rarity_obj = skin.get('rarity', {})
+            rarity = rarity_obj.get('name') if rarity_obj else None
             
             all_items.append({
                 **parsed,
                 'image_url': skin.get('image', ''),
-                'collection': metadata.get('collection'),
-                'rarity': metadata.get('rarity')
+                'collection': collection,
+                'rarity': rarity
             })
         
         # 2. STICKERS
@@ -151,13 +159,17 @@ def populate():
                 continue
             
             parsed = parse_item_name(market_hash_name)
-            metadata = extract_metadata(sticker)
+            parsed['item_type'] = 'sticker'  # Force correct type
             
+            rarity_obj = sticker.get('rarity', {})
+            rarity = rarity_obj.get('name') if rarity_obj else None
+            
+            # Stickers don't have collections in the data
             all_items.append({
                 **parsed,
                 'image_url': sticker.get('image', ''),
-                'collection': metadata.get('collection'),
-                'rarity': metadata.get('rarity')
+                'collection': None,
+                'rarity': rarity
             })
         
         # 3. CASES
@@ -186,14 +198,19 @@ def populate():
                 continue
             
             parsed = parse_item_name(market_hash_name)
-            parsed['item_type'] = 'agent'  # Force correct type
-            metadata = extract_metadata(agent)
+            parsed['item_type'] = 'agent'
+            
+            rarity_obj = agent.get('rarity', {})
+            rarity = rarity_obj.get('name') if rarity_obj else None
+            
+            collections = agent.get('collections', [])
+            collection = collections[0].get('name') if collections else None
             
             all_items.append({
                 **parsed,
                 'image_url': agent.get('image', ''),
-                'collection': metadata.get('collection'),
-                'rarity': metadata.get('rarity')
+                'collection': collection,
+                'rarity': rarity
             })
         
         # 5. KEYCHAINS
@@ -205,13 +222,18 @@ def populate():
                 continue
             
             parsed = parse_item_name(market_hash_name)
-            metadata = extract_metadata(keychain)
+            
+            rarity_obj = keychain.get('rarity', {})
+            rarity = rarity_obj.get('name') if rarity_obj else None
+            
+            collections = keychain.get('collections', [])
+            collection = collections[0].get('name') if collections else None
             
             all_items.append({
                 **parsed,
                 'image_url': keychain.get('image', ''),
-                'collection': metadata.get('collection'),
-                'rarity': metadata.get('rarity')
+                'collection': collection,
+                'rarity': rarity
             })
         
         # 6. PATCHES
@@ -223,13 +245,16 @@ def populate():
                 continue
             
             parsed = parse_item_name(market_hash_name)
-            parsed['item_type'] = 'patch'  # Force correct type
+            parsed['item_type'] = 'patch'
+            
+            rarity_obj = patch.get('rarity', {})
+            rarity = rarity_obj.get('name') if rarity_obj else None
             
             all_items.append({
                 **parsed,
                 'image_url': patch.get('image', ''),
                 'collection': None,
-                'rarity': patch.get('rarity', {}).get('name')
+                'rarity': rarity
             })
         
         # 7. GRAFFITI
@@ -242,11 +267,14 @@ def populate():
             
             parsed = parse_item_name(market_hash_name)
             
+            rarity_obj = graf.get('rarity', {})
+            rarity = rarity_obj.get('name') if rarity_obj else None
+            
             all_items.append({
                 **parsed,
                 'image_url': graf.get('image', ''),
                 'collection': None,
-                'rarity': graf.get('rarity', {}).get('name')
+                'rarity': rarity
             })
         
         # 8. MUSIC KITS
@@ -259,11 +287,14 @@ def populate():
             
             parsed = parse_item_name(market_hash_name)
             
+            rarity_obj = mk.get('rarity', {})
+            rarity = rarity_obj.get('name') if rarity_obj else None
+            
             all_items.append({
                 **parsed,
                 'image_url': mk.get('image', ''),
                 'collection': None,
-                'rarity': mk.get('rarity', {}).get('name')
+                'rarity': rarity
             })
         
         # INSERT INTO DATABASE
