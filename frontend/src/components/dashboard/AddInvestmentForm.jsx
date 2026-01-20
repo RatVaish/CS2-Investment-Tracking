@@ -1,30 +1,19 @@
 import React, { useState } from 'react';
 import { investmentsAPI } from '../../api/investments';
+import ItemSearchSelect from '../ItemSearchSelect';
 
 function AddInvestmentForm() {
   const [formData, setFormData] = useState({
-    item_name: '',
-    item_type: 'skin',
+    item_id: null,
     purchase_price: '',
     quantity: 1,
-    purchase_date: ''
+    purchase_date: '',
+    notes: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-
-  const itemTypes = [
-    { value: 'skin', label: 'Skin' },
-    { value: 'knife', label: 'Knife' },
-    { value: 'gloves', label: 'Gloves' },
-    { value: 'sticker', label: 'Sticker' },
-    { value: 'case', label: 'Case' },
-    { value: 'agent', label: 'Agent' },
-    { value: 'patch', label: 'Patch' },
-    { value: 'music_kit', label: 'Music Kit' },
-    { value: 'graffiti', label: 'Graffiti' },
-    { value: 'other', label: 'Other' }
-  ];
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -32,22 +21,45 @@ function AddInvestmentForm() {
       ...prev,
       [name]: value
     }));
+    // Clear field error when user starts typing
+    if (fieldErrors[name]) {
+      setFieldErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const handleItemSelect = (itemId) => {
+    setFormData(prev => ({
+      ...prev,
+      item_id: itemId
+    }));
+    // Clear item error when selected
+    if (fieldErrors.item_id) {
+      setFieldErrors(prev => ({ ...prev, item_id: '' }));
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess(false);
+    setFieldErrors({});
     setLoading(true);
 
     try {
-      // Convert purchase_price to float and quantity to int
+      // Validate item is selected
+      if (!formData.item_id) {
+        setFieldErrors({ item_id: 'Please select an item' });
+        setLoading(false);
+        return;
+      }
+
+      // Prepare investment data for V3 backend
       const investmentData = {
-        item_name: formData.item_name,
-        item_type: formData.item_type,
+        item_id: formData.item_id,
         purchase_price: parseFloat(formData.purchase_price),
         quantity: parseInt(formData.quantity),
-        ...(formData.purchase_date && { purchase_date: formData.purchase_date })
+        purchase_date: formData.purchase_date || new Date().toISOString(),
+        ...(formData.notes && { notes: formData.notes })
       };
 
       await investmentsAPI.create(investmentData);
@@ -55,11 +67,11 @@ function AddInvestmentForm() {
       // Success - reset form
       setSuccess(true);
       setFormData({
-        item_name: '',
-        item_type: 'skin',
+        item_id: null,
         purchase_price: '',
         quantity: 1,
-        purchase_date: ''
+        purchase_date: '',
+        notes: ''
       });
 
       // Hide success message after 3 seconds
@@ -92,50 +104,18 @@ function AddInvestmentForm() {
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="bg-gray-800 border border-gray-700 rounded-xl p-6 space-y-6">
-        {/* Item Name */}
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Item Name *
-          </label>
-          <input
-            type="text"
-            name="item_name"
-            value={formData.item_name}
-            onChange={handleChange}
-            className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 transition-colors"
-            placeholder="e.g., AK-47 | Redline (Field-Tested)"
-            required
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            Enter the full item name including condition
-          </p>
-        </div>
-
-        {/* Item Type */}
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Item Type *
-          </label>
-          <select
-            name="item_type"
-            value={formData.item_type}
-            onChange={handleChange}
-            className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-500 transition-colors"
-            required
-          >
-            {itemTypes.map(type => (
-              <option key={type.value} value={type.value}>
-                {type.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Item Search/Select */}
+        <ItemSearchSelect
+          value={formData.item_id}
+          onChange={handleItemSelect}
+          error={fieldErrors.item_id}
+        />
 
         {/* Purchase Price and Quantity */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Purchase Price (£) *
+              Purchase Price (£) <span className="text-red-400">*</span>
             </label>
             <input
               type="number"
@@ -152,7 +132,7 @@ function AddInvestmentForm() {
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Quantity *
+              Quantity <span className="text-red-400">*</span>
             </label>
             <input
               type="number"
@@ -167,10 +147,10 @@ function AddInvestmentForm() {
           </div>
         </div>
 
-        {/* Purchase Date (Optional) */}
+        {/* Purchase Date */}
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Purchase Date (Optional)
+            Purchase Date <span className="text-red-400">*</span>
           </label>
           <input
             type="datetime-local"
@@ -178,6 +158,25 @@ function AddInvestmentForm() {
             value={formData.purchase_date}
             onChange={handleChange}
             className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-500 transition-colors"
+            required
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            Leave empty to use current date/time
+          </p>
+        </div>
+
+        {/* Notes (Optional) */}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            Notes (Optional)
+          </label>
+          <textarea
+            name="notes"
+            value={formData.notes}
+            onChange={handleChange}
+            className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 transition-colors resize-none"
+            placeholder="Add any notes about this investment..."
+            rows="3"
           />
         </div>
 

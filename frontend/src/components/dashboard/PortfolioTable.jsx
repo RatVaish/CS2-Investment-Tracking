@@ -43,10 +43,9 @@ function PortfolioTable() {
   const startEdit = (investment) => {
     setEditingId(investment.id);
     setEditForm({
-      item_name: investment.item_name,
-      item_type: investment.item_type,
       purchase_price: investment.purchase_price,
-      quantity: investment.quantity
+      quantity: investment.quantity,
+      notes: investment.notes || ''
     });
   };
 
@@ -57,8 +56,8 @@ function PortfolioTable() {
 
   const saveEdit = async (id) => {
     try {
-      const updated = await investmentsAPI.update(id, editForm);
-      setInvestments(investments.map(inv => inv.id === id ? updated : inv));
+      await investmentsAPI.update(id, editForm);
+      await fetchInvestments(); // Refetch to get updated data with recalculated P&L
       setEditingId(null);
       setEditForm({});
     } catch (err) {
@@ -71,14 +70,15 @@ function PortfolioTable() {
     setExpandedRow(expandedRow === id ? null : id);
   };
 
-  const calculateProfitLoss = (investment) => {
-    if (!investment.current_price) return null;
-    return (investment.current_price - investment.purchase_price) * investment.quantity;
-  };
-
-  const calculateROI = (investment) => {
-    if (!investment.current_price || investment.purchase_price === 0) return null;
-    return ((investment.current_price - investment.purchase_price) / investment.purchase_price) * 100;
+  const formatDate = (dateString) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   if (loading) {
@@ -118,9 +118,6 @@ function PortfolioTable() {
                 <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   Item
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                  Type
-                </th>
                 <th className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
                   Purchase Price
                 </th>
@@ -129,6 +126,9 @@ function PortfolioTable() {
                 </th>
                 <th className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
                   Quantity
+                </th>
+                <th className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Total Value
                 </th>
                 <th className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
                   P&L
@@ -149,24 +149,29 @@ function PortfolioTable() {
                     className="hover:bg-gray-700/30 transition-colors cursor-pointer"
                     onClick={() => toggleExpand(investment.id)}
                   >
+                    {/* Item Name & Image */}
                     <td className="px-6 py-4">
-                      {editingId === investment.id ? (
-                        <input
-                          type="text"
-                          value={editForm.item_name}
-                          onChange={(e) => setEditForm({...editForm, item_name: e.target.value})}
-                          className="w-full px-2 py-1 bg-gray-900 border border-gray-600 rounded text-white text-sm"
-                          onClick={(e) => e.stopPropagation()}
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={investment.item?.image_url || 'https://via.placeholder.com/48/1f2937/ffffff?text=CS2'}
+                          alt={investment.item?.market_hash_name || 'Item'}
+                          className="w-12 h-12 object-contain bg-gray-900 rounded border border-gray-700"
+                          onError={(e) => {
+                            e.target.src = 'https://via.placeholder.com/48/1f2937/ffffff?text=CS2';
+                          }}
                         />
-                      ) : (
-                        <div className="text-white font-medium">{investment.item_name}</div>
-                      )}
+                        <div>
+                          <div className="text-white font-medium">
+                            {investment.item?.market_hash_name || 'Unknown Item'}
+                          </div>
+                          <div className="text-gray-500 text-xs">
+                            {investment.item?.item_type || 'Unknown'}
+                          </div>
+                        </div>
+                      </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="px-2 py-1 bg-gray-700 text-gray-300 rounded text-xs uppercase">
-                        {investment.item_type}
-                      </span>
-                    </td>
+
+                    {/* Purchase Price */}
                     <td className="px-6 py-4 text-right text-white">
                       {editingId === investment.id ? (
                         <input
@@ -176,14 +181,28 @@ function PortfolioTable() {
                           className="w-24 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-white text-sm text-right"
                           onClick={(e) => e.stopPropagation()}
                           step="0.01"
+                          min="0"
                         />
                       ) : (
                         `£${investment.purchase_price.toFixed(2)}`
                       )}
                     </td>
-                    <td className="px-6 py-4 text-right text-white">
-                      {investment.current_price ? `£${investment.current_price.toFixed(2)}` : '-'}
+
+                    {/* Current Price (CSFloat) */}
+                    <td className="px-6 py-4 text-right">
+                      {investment.item?.csfloat_price ? (
+                        <div>
+                          <div className="text-white">
+                            £{investment.item.csfloat_price.toFixed(2)}
+                          </div>
+                          <div className="text-xs text-cyan-400">CSFloat</div>
+                        </div>
+                      ) : (
+                        <span className="text-gray-500">-</span>
+                      )}
                     </td>
+
+                    {/* Quantity */}
                     <td className="px-6 py-4 text-right text-white">
                       {editingId === investment.id ? (
                         <input
@@ -198,30 +217,39 @@ function PortfolioTable() {
                         investment.quantity
                       )}
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      {(() => {
-                        const pl = calculateProfitLoss(investment);
-                        if (pl === null) return <span className="text-gray-500">-</span>;
-                        const isPositive = pl >= 0;
-                        return (
-                          <span className={isPositive ? 'text-green-400' : 'text-red-400'}>
-                            {isPositive ? '+' : ''}£{pl.toFixed(2)}
-                          </span>
-                        );
-                      })()}
+
+                    {/* Total Value */}
+                    <td className="px-6 py-4 text-right text-white font-medium">
+                      {investment.item?.csfloat_price ? (
+                        `£${(investment.item.csfloat_price * investment.quantity).toFixed(2)}`
+                      ) : (
+                        '-'
+                      )}
                     </td>
+
+                    {/* Profit/Loss */}
                     <td className="px-6 py-4 text-right">
-                      {(() => {
-                        const roi = calculateROI(investment);
-                        if (roi === null) return <span className="text-gray-500">-</span>;
-                        const isPositive = roi >= 0;
-                        return (
-                          <span className={isPositive ? 'text-green-400' : 'text-red-400'}>
-                            {isPositive ? '+' : ''}{roi.toFixed(2)}%
-                          </span>
-                        );
-                      })()}
+                      {investment.profit_loss !== null && investment.profit_loss !== undefined ? (
+                        <span className={`font-medium ${investment.profit_loss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {investment.profit_loss >= 0 ? '+' : ''}£{investment.profit_loss.toFixed(2)}
+                        </span>
+                      ) : (
+                        <span className="text-gray-500">-</span>
+                      )}
                     </td>
+
+                    {/* ROI */}
+                    <td className="px-6 py-4 text-right">
+                      {investment.roi !== null && investment.roi !== undefined ? (
+                        <span className={`font-medium ${investment.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {investment.roi >= 0 ? '+' : ''}{investment.roi.toFixed(2)}%
+                        </span>
+                      ) : (
+                        <span className="text-gray-500">-</span>
+                      )}
+                    </td>
+
+                    {/* Actions */}
                     <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                       {editingId === investment.id ? (
                         <div className="flex justify-end space-x-2">
@@ -257,15 +285,89 @@ function PortfolioTable() {
                     </td>
                   </tr>
 
-                  {/* Expanded Row (Chart Placeholder) */}
+                  {/* Expanded Row (Details) */}
                   {expandedRow === investment.id && (
                     <tr>
                       <td colSpan="8" className="px-6 py-6 bg-gray-900/50">
-                        <div className="border border-gray-700 rounded-lg p-8 text-center">
-                          <p className="text-gray-400 mb-2">Price Chart</p>
-                          <p className="text-gray-500 text-sm">
-                            Candlestick chart will be displayed here (Coming in v3)
-                          </p>
+                        <div className="border border-gray-700 rounded-lg p-6">
+                          <h3 className="text-lg font-semibold text-white mb-4">Investment Details</h3>
+                          <div className="grid grid-cols-2 gap-6">
+                            {/* Left Column */}
+                            <div className="space-y-3">
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Item ID:</span>
+                                <span className="text-white">{investment.item_id}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Purchase Date:</span>
+                                <span className="text-white">{formatDate(investment.purchase_date)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Total Invested:</span>
+                                <span className="text-white font-medium">
+                                  £{(investment.purchase_price * investment.quantity).toFixed(2)}
+                                </span>
+                              </div>
+
+                              {/* Price Sources */}
+                              <div className="pt-3 border-t border-gray-700">
+                                <span className="text-gray-400 block mb-2">Price Sources:</span>
+                                <div className="space-y-1 text-sm">
+                                  {investment.item?.csfloat_price && (
+                                    <div className="flex justify-between">
+                                      <span className="text-cyan-400">CSFloat:</span>
+                                      <span className="text-white">£{investment.item.csfloat_price.toFixed(2)}</span>
+                                    </div>
+                                  )}
+                                  {investment.item?.buff_price && (
+                                    <div className="flex justify-between">
+                                      <span className="text-orange-400">Buff163:</span>
+                                      <span className="text-white">£{investment.item.buff_price.toFixed(2)}</span>
+                                    </div>
+                                  )}
+                                  {investment.item?.steam_price && (
+                                    <div className="flex justify-between">
+                                      <span className="text-blue-400">Steam:</span>
+                                      <span className="text-white">£{investment.item.steam_price.toFixed(2)}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Right Column */}
+                            <div className="space-y-3">
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Created:</span>
+                                <span className="text-white text-sm">{formatDate(investment.created_at)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Last Updated:</span>
+                                <span className="text-white text-sm">{formatDate(investment.updated_at)}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Notes */}
+                          {investment.notes && (
+                            <div className="mt-4 pt-4 border-t border-gray-700">
+                              <span className="text-gray-400 block mb-2">Notes:</span>
+                              <p className="text-white text-sm">{investment.notes}</p>
+                            </div>
+                          )}
+
+                          {/* Price Chart Placeholder */}
+                          <div className="mt-6 pt-6 border-t border-gray-700">
+                            <h4 className="text-white font-medium mb-4">7-Day Price History</h4>
+                            <div className="flex items-center justify-center h-48 border border-gray-700 rounded-lg bg-gray-800">
+                              <div className="text-center">
+                                <p className="text-gray-400 mb-2">Price Chart</p>
+                                <p className="text-gray-500 text-sm">
+                                  Coming soon - Candlestick chart with 7 days of price data
+                                </p>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </td>
                     </tr>

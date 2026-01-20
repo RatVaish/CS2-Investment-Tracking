@@ -23,9 +23,9 @@ def get_investments(db: Session, user_id: int, skip: int = 0, limit: int = 100) 
 
 def get_investments_with_items(db: Session, user_id: int, skip: int = 0, limit: int = 100) -> List[dict]:
     """
-    Get investments with item details and current prices
+    Get investments with NESTED item details and current prices
 
-    Returns list of dicts with investment + item data
+    Returns list of dicts with investment + nested item object
     """
     investments = db.query(Investment).options(
         joinedload(Investment.item).joinedload(Item.price)
@@ -37,31 +37,46 @@ def get_investments_with_items(db: Session, user_id: int, skip: int = 0, limit: 
     for inv in investments:
         item = inv.item
         price = item.price if item else None
-        current_price = price.csfloat_price if price else None
 
-        # Calculate profit/loss
+        # Get prices from different sources
+        csfloat_price = price.csfloat_price if price else None
+        buff_price = price.buff_price if price else None
+        steam_price = price.steam_price if price else None
+
+        # Calculate profit/loss using CSFloat as primary price
         profit_loss = None
         roi = None
-        if current_price:
-            profit_loss = (current_price - inv.purchase_price) * inv.quantity
-            roi = ((current_price - inv.purchase_price) / inv.purchase_price) * 100 if inv.purchase_price > 0 else 0
+        if csfloat_price:
+            profit_loss = (csfloat_price - inv.purchase_price) * inv.quantity
+            roi = ((csfloat_price - inv.purchase_price) / inv.purchase_price) * 100 if inv.purchase_price > 0 else 0
 
+        # Build nested structure
         results.append({
+            # Investment fields
             "id": inv.id,
             "user_id": inv.user_id,
             "item_id": inv.item_id,
-            "item_name": item.market_hash_name if item else "Unknown",
-            "item_type": item.item_type if item else "unknown",
-            "image_url": item.image_url if item else None,
             "purchase_price": inv.purchase_price,
-            "current_price": current_price,
             "quantity": inv.quantity,
             "purchase_date": inv.purchase_date,
             "notes": inv.notes,
-            "profit_loss": profit_loss,
-            "roi": roi,
             "created_at": inv.created_at,
-            "updated_at": inv.updated_at
+            "updated_at": inv.updated_at,
+
+            # Nested item object
+            "item": {
+                "id": item.id if item else None,
+                "market_hash_name": item.market_hash_name if item else "Unknown",
+                "item_type": item.item_type if item else "unknown",
+                "image_url": item.image_url if item else None,
+                "csfloat_price": csfloat_price,
+                "buff_price": buff_price,
+                "steam_price": steam_price
+            },
+
+            # Calculated fields
+            "profit_loss": profit_loss,
+            "roi": roi
         })
 
     return results
@@ -120,8 +135,10 @@ def get_portfolio_summary(db: Session, user_id: int) -> dict:
 
     total_investments = len(investments)
     total_invested = sum(inv["purchase_price"] * inv["quantity"] for inv in investments)
+
+    # Use CSFloat price as primary
     total_current_value = sum(
-        (inv["current_price"] or 0) * inv["quantity"]
+        (inv["item"]["csfloat_price"] or 0) * inv["quantity"]
         for inv in investments
     )
     total_profit_loss = sum(inv["profit_loss"] or 0 for inv in investments)
