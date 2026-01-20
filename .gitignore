@@ -90,3 +90,4 @@ Thumbs.db
 # Logs
 logs/
 *.log
+.env
