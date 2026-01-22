@@ -23,6 +23,8 @@ class Investment(Base):
     # Relationships
     user = relationship("User", back_populates="investments")
     item = relationship("Item", back_populates="investments")
+    csfloat_price = relationship("ItemPrice", primaryjoin="Investment.item_id == foreign(ItemPrice.item_id)",
+                                 uselist=False, viewonly=True)
 
     def __repr__(self):
         return f"<Investment user_id={self.user_id} item_id={self.item_id} qty={self.quantity}>"

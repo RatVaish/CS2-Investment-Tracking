@@ -33,12 +33,29 @@ class Investment(InvestmentBase):
         from_attributes = True
 
 
-class InvestmentWithItem(Investment):
-    """Investment with item details included"""
-    item_name: str
+class ItemDetail(BaseModel):
+    """Nested item details"""
+    id: int
+    market_hash_name: str
     item_type: str
     image_url: Optional[str] = None
-    current_price: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+
+class CSFloatPriceDetail(BaseModel):
+    """Nested CSFloat price details"""
+    price: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+
+class InvestmentWithItem(Investment):
+    """Investment with nested item and price details"""
+    item: ItemDetail
+    csfloat_price: Optional[CSFloatPriceDetail] = None
     profit_loss: Optional[float] = None
     roi: Optional[float] = None
 

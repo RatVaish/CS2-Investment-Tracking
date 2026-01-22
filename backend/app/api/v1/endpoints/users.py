@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import joinedload
 
 from app.api.deps import get_db, get_current_user
 from app.schemas.user import User as UserSchema, UserUpdate, UserWithStats
@@ -36,7 +37,10 @@ def get_current_user_with_stats(
     :return: User profile with investment stats
     """
     # Get user's investments
-    investments = db.query(Investment).filter(
+    investments = db.query(Investment).options(
+        joinedload(Investment.item),
+        joinedload(Investment.csfloat_price)
+    ).filter(
         Investment.user_id == current_user.id
     ).all()
 
@@ -46,9 +50,10 @@ def get_current_user_with_stats(
     total_profit_loss = 0.0
 
     for inv in investments:
-        if inv.current_price is not None:
-            total_value += inv.current_price * inv.quantity
-            profit_loss = (inv.current_price - inv.purchase_price) * inv.quantity
+        if inv.csfloat_price and inv.csfloat_price.price is not None:
+            current_price = inv.csfloat_price.price
+            total_value += current_price * inv.quantity
+            profit_loss = (current_price - inv.purchase_price) * inv.quantity
             total_profit_loss += profit_loss
 
     # Convert user to dict and add stats

@@ -7,7 +7,7 @@ function AddInvestmentForm() {
     item_id: null,
     purchase_price: '',
     quantity: 1,
-    purchase_date: '',
+    purchase_date: new Date().toISOString().slice(0, 16),
     notes: ''
   });
   const [loading, setLoading] = useState(false);
@@ -158,7 +158,6 @@ function AddInvestmentForm() {
             value={formData.purchase_date}
             onChange={handleChange}
             className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-cyan-500 transition-colors"
-            required
           />
           <p className="mt-1 text-xs text-gray-500">
             Leave empty to use current date/time
