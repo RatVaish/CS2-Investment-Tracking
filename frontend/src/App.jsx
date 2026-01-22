@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import Landing from './pages/Landing';
 import Dashboard from './pages/Dashboard';
+import GoogleCallback from './pages/GoogleCallback';
 
 function App() {
   const { isAuthenticated, loading } = useAuth();
@@ -28,6 +29,12 @@ function App() {
           isAuthenticated ? <Dashboard /> : <Navigate to="/" replace />
         }
       />
+
+      <Route
+          path="/auth/callback"
+          element={<GoogleCallback />}
+      />
+
 
       {/* Catch all - redirect to home */}
       <Route path="*" element={<Navigate to="/" replace />} />

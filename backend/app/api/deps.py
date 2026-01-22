@@ -66,8 +66,14 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Get user from database
-    user = get_user_by_id(db, user_id=int(user_id))
+    # Handle both email (from OAuth) and user_id (from regular login)
+    try:
+        user = get_user_by_id(db, user_id=int(user_id))
+    except ValueError:
+        # It's an email, not an ID
+        from app.crud.user import get_user_by_email
+        user = get_user_by_email(db, email=user_id)
+
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
