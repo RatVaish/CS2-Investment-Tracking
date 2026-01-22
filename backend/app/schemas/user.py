@@ -18,8 +18,9 @@ class UserUpdate(BaseModel):
     """Schema for updating user information"""
     email: Optional[EmailStr] = None
     username: Optional[str] = Field(None, min_length=3, max_length=50)
+    steam_id: Optional[str] = None
+    steam_profile_url: Optional[str] = None
     avatar_url: Optional[str] = None
-
 
 class UserInDB(UserBase):
     """User schema as stored in database"""

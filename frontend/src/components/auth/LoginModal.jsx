@@ -118,6 +118,17 @@ function LoginModal({ onClose, onSwitchToRegister }) {
               Continue with Google
             </button>
 
+            {/* Steam Sign In */}
+            <button
+              type="button"
+              onClick={() => window.location.href = 'http://localhost:8000/api/v1/auth/steam/login'}
+              className="w-full py-3 bg-gradient-to-r from-blue-800 to-blue-900 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-all"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2a10 10 0 0 1 10 10 10 10 0 0 1-10 10C6.47 22 2 17.5 2 12A10 10 0 0 1 12 2m0-2C5.37 0 0 5.37 0 12c0 5.1 3.2 9.4 7.7 11.1l2.5-3.6c-.7-.3-1.2-.9-1.2-1.7 0-1.1.9-2 2-2s2 .9 2 2c0 .8-.5 1.4-1.2 1.7l2.5 3.6C18.8 21.4 22 17.1 22 12c0-6.6-5.4-12-12-12z"/>
+              </svg>
+              Continue with Steam
+            </button>
           </form>
 
           {/* Switch to register */}

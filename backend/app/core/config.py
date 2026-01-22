@@ -29,4 +29,8 @@ class Settings:
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
 
+    # Steam API
+    STEAM_API_KEY: str = os.getenv("STEAM_API_KEY", "")
+    STEAM_RETURN_URL: str = "http://localhost:8000/api/v1/auth/steam/callback"
+
 settings = Settings()

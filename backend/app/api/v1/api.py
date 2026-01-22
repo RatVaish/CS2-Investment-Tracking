@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from app.api.v1.endpoints import auth, users, investments, prices, portfolio, items
 from app.api.v1.endpoints import google_auth
+from app.api.v1.endpoints import steam_auth
 
 api_router = APIRouter()
 
@@ -47,3 +48,10 @@ api_router.include_router(
     prefix="/auth/google",
     tags=["google-auth"]
 )
+
+api_router.include_router(
+    steam_auth.router,
+    prefix="/auth/steam",
+    tags=["steam-auth"]
+)
+

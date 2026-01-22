@@ -103,6 +103,10 @@ def create_steam_user(db: Session, steam_id: str, username: str,
     db.refresh(db_user)
     return db_user
 
+def get_user_by_steam_id(db: Session, steam_id: str) -> Optional[User]:
+    """Get user by Steam ID"""
+    return db.query(User).filter(User.steam_id == steam_id).first()
+
 
 def update_user(db: Session, user_id: int, user_update: UserUpdate) -> Optional[User]:
     """
@@ -155,3 +159,4 @@ def delete_user(db: Session, user_id: int) -> bool:
     db.delete(db_user)
     db.commit()
     return True
+
