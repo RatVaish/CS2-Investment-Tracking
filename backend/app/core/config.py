@@ -19,7 +19,12 @@ class Settings:
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # CORS
-    ALLOWED_ORIGINS: list = ["http://localhost:5173"]
+    ALLOWED_ORIGINS: list = [
+	"http://localhost:5173",
+	"http://100.95.133.40",
+	"http://100.95.133.40:80",
+	"http://192.168.1.232:80",
+    ]
     
     # CSFloat API
     CSFLOAT_API_KEY: str = os.getenv("CSFLOAT_API_KEY", "")
