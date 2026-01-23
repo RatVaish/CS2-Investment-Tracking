@@ -32,10 +32,10 @@ class Settings:
     # Google OAuth
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
-    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
+    GOOGLE_REDIRECT_URI: str = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/v1/auth/google/callback")
 
     # Steam API
     STEAM_API_KEY: str = os.getenv("STEAM_API_KEY", "")
-    STEAM_RETURN_URL: str = "http://localhost:8000/api/v1/auth/steam/callback"
+    STEAM_RETURN_URL: str = os.getenv("STEAM_RETURN_URL", "http://localhost:8000/api/v1/auth/steam/callback")
 
 settings = Settings()
