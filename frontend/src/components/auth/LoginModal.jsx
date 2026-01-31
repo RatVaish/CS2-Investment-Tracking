@@ -106,7 +106,7 @@ function LoginModal({ onClose, onSwitchToRegister }) {
             {/* Google Sign In */}
             <button
               type="button"
-              onClick={() => window.location.href = 'http://localhost:8000/api/v1/auth/google/login'}
+              onClick={() => window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'}/auth/google/login`}
               className="w-full py-3 bg-white hover:bg-gray-100 text-gray-800 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -121,7 +121,7 @@ function LoginModal({ onClose, onSwitchToRegister }) {
             {/* Steam Sign In */}
             <button
               type="button"
-              onClick={() => window.location.href = 'http://localhost:8000/api/v1/auth/steam/login'}
+              onClick={() => window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'}/auth/steam/login`}
               className="w-full py-3 bg-gradient-to-r from-blue-800 to-blue-900 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-all"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
