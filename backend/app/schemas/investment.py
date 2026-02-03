@@ -46,7 +46,7 @@ class ItemDetail(BaseModel):
 
 class CSFloatPriceDetail(BaseModel):
     """Nested CSFloat price details"""
-    price: Optional[float] = None
+    csfloat_price: Optional[float] = None
 
     class Config:
         from_attributes = True

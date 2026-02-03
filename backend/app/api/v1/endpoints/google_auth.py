@@ -77,5 +77,5 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
     refresh_token = create_refresh_token(data={"sub": user.email})
 
     # Redirect to frontend with tokens
-    frontend_url = f"http://localhost:5173/auth/callback?access_token={access_token}&refresh_token={refresh_token}"
+    frontend_url = f"{settings.FRONTEND_URL}/auth/callback?access_token={access_token}&refresh_token={refresh_token}"
     return RedirectResponse(frontend_url)

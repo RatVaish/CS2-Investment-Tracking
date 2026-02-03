@@ -8,7 +8,8 @@ class Settings:
     VERSION: str = "2.0.0"
     DESCRIPTION: str = "Track your Counter-Strike 2 item investments with real-time pricing"
     DEBUG: bool = os.getenv("DEBUG", "False") == "True"
-    
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost/cs_investments")
     

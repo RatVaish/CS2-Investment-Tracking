@@ -15,7 +15,7 @@ function GoogleCallback() {
       localStorage.setItem('refresh_token', refreshToken);
 
       // Redirect to dashboard
-      navigate('/dashboard');
+      navigate('/app');
     } else {
       // Failed - redirect to login
       navigate('/');

@@ -38,6 +38,9 @@ services:
       DEBUG: ${DEBUG:-False}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
       CSFLOAT_API_KEY: ${CSFLOAT_API_KEY}
+      FRONTEND_URL: ${FRONTEND_URL}
+      STEAM_RETURN_URL: ${STEAM_RETURN_URL}
+      STEAM_API_KEY: ${STEAM_API_KEY}
     volumes:
       - ./backend/public:/app/public
     ports:
@@ -56,7 +59,10 @@ services:
 
   # React Frontend with Nginx
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://100.95.133.40:8000/api/v1
     container_name: cs2_frontend
     restart: unless-stopped
     ports:

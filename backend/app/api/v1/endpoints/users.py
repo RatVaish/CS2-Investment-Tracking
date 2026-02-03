@@ -50,8 +50,8 @@ def get_current_user_with_stats(
     total_profit_loss = 0.0
 
     for inv in investments:
-        if inv.csfloat_price and inv.csfloat_price.price is not None:
-            current_price = inv.csfloat_price.price
+        if inv.csfloat_price and inv.csfloat_price.csfloat_price is not None:
+            current_price = inv.csfloat_price.csfloat_price
             total_value += current_price * inv.quantity
             profit_loss = (current_price - inv.purchase_price) * inv.quantity
             total_profit_loss += profit_loss

@@ -69,10 +69,12 @@ def get_investments_with_items(db: Session, user_id: int, skip: int = 0, limit: 
                 "market_hash_name": item.market_hash_name if item else "Unknown",
                 "item_type": item.item_type if item else "unknown",
                 "image_url": item.image_url if item else None,
-                "csfloat_price": csfloat_price,
-                "buff_price": buff_price,
-                "steam_price": steam_price
             },
+
+	    #Price at Investment Level
+	    "csfloat_price": {
+    		"csfloat_price": csfloat_price
+	    } if csfloat_price else None,
 
             # Calculated fields
             "profit_loss": profit_loss,

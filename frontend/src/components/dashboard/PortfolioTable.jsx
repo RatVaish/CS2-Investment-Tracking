@@ -190,10 +190,10 @@ function PortfolioTable() {
 
                     {/* Current Price (CSFloat) */}
                     <td className="px-6 py-4 text-right">
-                      {investment.item?.csfloat_price ? (
+                      {investment.csfloat_price?.csfloat_price ? (
                         <div>
                           <div className="text-white">
-                            £{investment.item.csfloat_price.toFixed(2)}
+                            £{investment.csfloat_price.csfloat_price.toFixed(2)}
                           </div>
                           <div className="text-xs text-cyan-400">CSFloat</div>
                         </div>
@@ -220,8 +220,8 @@ function PortfolioTable() {
 
                     {/* Total Value */}
                     <td className="px-6 py-4 text-right text-white font-medium">
-                      {investment.item?.csfloat_price ? (
-                        `£${(investment.item.csfloat_price * investment.quantity).toFixed(2)}`
+                      {investment.csfloat_price?.csfloat_price ? (
+                        `£${(investment.csfloat_price.csfloat_price * investment.quantity).toFixed(2)}`
                       ) : (
                         '-'
                       )}
