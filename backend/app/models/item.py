@@ -37,7 +37,7 @@ class Item(Base):
     updated_at = Column(TIMESTAMP, server_default='NOW()', onupdate='NOW()')
 
     # Relationships
-    price = relationship("ItemPrice", back_populates="item", uselist=False, cascade="all, delete-orphan")
+    prices = relationship("ItemPrice", back_populates="item", cascade="all, delete-orphan")
     price_history = relationship("PriceHistory", back_populates="item", cascade="all, delete-orphan")
     investments = relationship("Investment", back_populates="item")
 
