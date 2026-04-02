@@ -91,3 +91,16 @@ Thumbs.db
 logs/
 *.log
 .env
+
+# Pycache (global)
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+
+# Frontend env files
+frontend/.env.production
+frontend/.env.development
+frontend/.env.local
+
+# Loose scripts
+csfloat_api_test.py
