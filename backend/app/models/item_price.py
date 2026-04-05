@@ -1,46 +1,50 @@
-from sqlalchemy import Column, Integer, Float, ForeignKey, TIMESTAMP, String, Index
+from sqlalchemy import Column, Integer, Float, ForeignKey, TIMESTAMP, String, Index, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.db.base import Base
 
 
 class ItemPrice(Base):
     """
-    Current prices - ONE ROW PER ITEM PER MARKET
+    Current prices — ONE ROW PER ITEM PER MARKET (V4 normalised)
 
-    Old V3: One row per item with columns: csfloat_price, buff_price, steam_price
-    New V4: Multiple rows per item, one for each market
+    Markets: 'csfloat' | 'buff163' | 'steam'
+    Currencies: 'USD' (csfloat/steam) | 'CNY' (buff163)
 
-    Example:
-    item_id=1, market='csfloat', price=100.50
-    item_id=1, market='buff163', price=95.00
-    item_id=1, market='steam', price=110.00
+    Example rows:
+        item_id=1, market='csfloat', price=100.50, currency='USD'
+        item_id=1, market='buff163', price=720.00, currency='CNY'
+        item_id=1, market='steam',   price=110.00, currency='USD'
     """
     __tablename__ = "item_prices"
 
     id = Column(Integer, primary_key=True, index=True)
     item_id = Column(Integer, ForeignKey('items.id', ondelete='CASCADE'), nullable=False, index=True)
-    market = Column(String(20), nullable=False, index=True)  # 'csfloat', 'buff163', 'steam'
+
+    # Which market this row represents
+    market = Column(String(20), nullable=False)  # 'csfloat' | 'buff163' | 'steam'
 
     # Price data
-    price = Column(Float)  # Main price
-    lowest_listing = Column(Float)  # Lowest available listing
-    highest_bid = Column(Float)  # Highest buy order (if applicable)
+    price = Column(Float, nullable=True)            # Main reference price
+    lowest_listing = Column(Float, nullable=True)   # Lowest active listing
+    highest_bid = Column(Float, nullable=True)      # Highest buy order
 
     # Volume metrics
-    volume = Column(Integer)  # Trading volume
-    listing_count = Column(Integer)  # Number of active listings
+    volume = Column(Integer, nullable=True)         # 24h trading volume
+    listing_count = Column(Integer, nullable=True)  # Number of active listings
 
-    # Metadata
-    currency = Column(String(3), default='USD')  # USD, CNY, EUR
-    updated_at = Column(TIMESTAMP)
+    # Currency — stored with the price so historical context is never lost
+    currency = Column(String(3), nullable=False, default='USD')  # 'USD' | 'CNY'
 
-    # Relationship
+    updated_at = Column(TIMESTAMP, nullable=True)
+
+    # Relationships
     item = relationship("Item", back_populates="prices")
 
-    # Composite unique index: one price record per item per market
     __table_args__ = (
-        Index('idx_item_market', 'item_id', 'market', unique=True),
+        # One price record per item per market
+        UniqueConstraint('item_id', 'market', name='uq_item_market'),
+        Index('idx_item_prices_market', 'market'),
     )
 
     def __repr__(self):
-        return f"<ItemPrice item_id={self.item_id} market={self.market} price={self.price}>"
+        return f"<ItemPrice item_id={self.item_id} market={self.market} price={self.price} {self.currency}>"

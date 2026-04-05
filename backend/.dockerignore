@@ -20,5 +20,3 @@ htmlcov
 *.log
 .env
 .env.local
-alembic/versions/*.py
-!alembic/versions/__init__.py
