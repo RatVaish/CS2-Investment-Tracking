@@ -1,8 +1,21 @@
+"""
+APScheduler job definitions for CS2 Investment Tracker.
+
+Schedule overview:
+    Every 30 min  — CSFloat price update (bulk price-list endpoint)
+    Daily  3am    — Buff163 full goods crawl (~350 pages, CNY prices)
+    Daily  4am    — ByMykel item sync (SHA check, fast if no changes)
+    Weekly Mon 2am — Steam Market item discovery (catches new items)
+    Hourly         — Steam price history update (new candles for all items)
+    Daily  1am    — Portfolio snapshots (one per user per day)
+
+Backfill jobs (run manually, not on schedule):
+    run_backfill() in steam_price_client.py — run once to seed history
+"""
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
-from app.services.price_updater import PriceUpdater
 import logging
 
 logger = logging.getLogger(__name__)
@@ -10,107 +23,176 @@ logger = logging.getLogger(__name__)
 scheduler = BackgroundScheduler()
 
 
-def update_csfloat_prices():
-    """Update CSFloat prices for ALL items (runs every 30 minutes)"""
-    logger.info("Starting CSFloat price update job")
+# ---------------------------------------------------------------------------
+# Job functions
+# ---------------------------------------------------------------------------
+
+def job_update_csfloat_prices():
+    """Update CSFloat prices for all items (every 30 minutes)."""
+    logger.info("JOB: CSFloat price update starting")
     db = SessionLocal()
     try:
+        from app.services.price_updater import PriceUpdater
         updater = PriceUpdater(db)
         updater.update_csfloat_prices()
-        logger.info("CSFloat price update completed")
+        logger.info("JOB: CSFloat price update complete")
     except Exception as e:
-        logger.error(f"CSFloat price update failed: {e}")
+        logger.error(f"JOB: CSFloat price update failed: {e}")
     finally:
         db.close()
 
 
-def update_buff_prices():
-    """Update Buff prices for ALL items (runs every 30 minutes)"""
-    logger.info("Starting Buff price update job")
+def job_update_buff_prices():
+    """Full Buff163 goods crawl — updates CNY prices for all items (daily)."""
+    logger.info("JOB: Buff163 price update starting")
     db = SessionLocal()
     try:
-        updater = PriceUpdater(db)
-        updater.update_buff_prices()
-        logger.info("Buff price update completed")
+        from app.services.buff_client import run_buff_price_update
+        result = run_buff_price_update(db)
+        logger.info(f"JOB: Buff163 price update complete: {result}")
     except Exception as e:
-        logger.error(f"Buff price update failed: {e}")
+        logger.error(f"JOB: Buff163 price update failed: {e}")
     finally:
         db.close()
 
 
-def update_steam_prices():
-    """Update Steam prices for ALL items (runs weekly)"""
-    logger.info("Starting Steam price update job")
+def job_update_steam_history():
+    """
+    Hourly Steam price history update.
+    Fetches latest candles for all active items.
+    """
+    logger.info("JOB: Steam price history update starting")
     db = SessionLocal()
     try:
-        updater = PriceUpdater(db)
-        updater.update_steam_prices()
-        logger.info("Steam price update completed")
+        from app.services.steam_price_client import run_hourly_update
+        result = run_hourly_update(db)
+        logger.info(f"JOB: Steam price history update complete: {result}")
     except Exception as e:
-        logger.error(f"Steam price update failed: {e}")
+        logger.error(f"JOB: Steam price history update failed: {e}")
     finally:
         db.close()
 
 
-def compress_old_hourly_data():
-    """Compress hourly data older than 30 days into daily candles (runs daily at midnight)"""
-    logger.info("Starting hourly data compression")
+def job_item_sync_bymykel():
+    """
+    Daily ByMykel item sync.
+    SHA check is fast — only does full sync if repo has changed.
+    """
+    logger.info("JOB: ByMykel item sync starting")
     db = SessionLocal()
     try:
-        updater = PriceUpdater(db)
-        updater.compress_old_hourly_data()
-        logger.info("Hourly data compression completed")
+        from app.services.item_sync import run_sync
+        result = run_sync(db)
+        logger.info(f"JOB: ByMykel item sync complete: {result}")
     except Exception as e:
-        logger.error(f"Hourly data compression failed: {e}")
+        logger.error(f"JOB: ByMykel item sync failed: {e}")
     finally:
         db.close()
 
+
+def job_item_sync_steam_market():
+    """
+    Weekly Steam Market item discovery.
+    Catches new items that ByMykel hasn't added yet.
+    """
+    logger.info("JOB: Steam Market item sync starting")
+    db = SessionLocal()
+    try:
+        from app.services.steam_market_sync import run_steam_market_sync
+        result = run_steam_market_sync(db)
+        logger.info(f"JOB: Steam Market item sync complete: {result}")
+    except Exception as e:
+        logger.error(f"JOB: Steam Market item sync failed: {e}")
+    finally:
+        db.close()
+
+
+def job_portfolio_snapshots():
+    """
+    Daily portfolio snapshots.
+    One row per user per day in portfolio_snapshots table.
+    Powers the portfolio value over time chart.
+    """
+    logger.info("JOB: Portfolio snapshots starting")
+    db = SessionLocal()
+    try:
+        from app.services.portfolio_snapshot import run_daily_snapshots
+        result = run_daily_snapshots(db)
+        logger.info(f"JOB: Portfolio snapshots complete: {result}")
+    except Exception as e:
+        logger.error(f"JOB: Portfolio snapshots failed: {e}")
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Scheduler setup
+# ---------------------------------------------------------------------------
 
 def start_scheduler():
-    """Initialize and start all scheduled jobs"""
+    """Initialise and start all scheduled jobs."""
 
-    # CSFloat prices - every 30 minutes
+    # CSFloat — every 30 minutes
     scheduler.add_job(
-        update_csfloat_prices,
-        'interval',
+        job_update_csfloat_prices,
+        "interval",
         minutes=30,
-        id='update_csfloat_prices',
-        replace_existing=True
-    )
-
-    # Buff prices - every 30 minutes (offset by 15 min from CSFloat)
-    scheduler.add_job(
-        update_buff_prices,
-        'interval',
-        minutes=30,
-        id='update_buff_prices',
+        id="update_csfloat_prices",
         replace_existing=True,
-        next_run_time=None  # Start immediately, then every 30 min
     )
 
-    # Steam prices - weekly on Monday at 3 AM UTC
+    # Buff163 — daily at 3am UTC
     scheduler.add_job(
-        update_steam_prices,
-        CronTrigger(day_of_week='mon', hour=3, minute=0),
-        id='update_steam_prices',
-        replace_existing=True
+        job_update_buff_prices,
+        CronTrigger(hour=3, minute=0),
+        id="update_buff_prices",
+        replace_existing=True,
     )
 
-    # Compress old hourly data - daily at midnight UTC
+    # Steam price history — every hour
     scheduler.add_job(
-        compress_old_hourly_data,
-        CronTrigger(hour=0, minute=0),
-        id='compress_old_hourly_data',
-        replace_existing=True
+        job_update_steam_history,
+        "interval",
+        hours=1,
+        id="update_steam_history",
+        replace_existing=True,
+    )
+
+    # ByMykel item sync — daily at 4am UTC
+    scheduler.add_job(
+        job_item_sync_bymykel,
+        CronTrigger(hour=4, minute=0),
+        id="item_sync_bymykel",
+        replace_existing=True,
+    )
+
+    # Steam Market item discovery — weekly Monday 2am UTC
+    scheduler.add_job(
+        job_item_sync_steam_market,
+        CronTrigger(day_of_week="mon", hour=2, minute=0),
+        id="item_sync_steam_market",
+        replace_existing=True,
+    )
+
+    # Portfolio snapshots — daily at 1am UTC
+    scheduler.add_job(
+        job_portfolio_snapshots,
+        CronTrigger(hour=1, minute=0),
+        id="portfolio_snapshots",
+        replace_existing=True,
     )
 
     scheduler.start()
-    logger.info("Scheduler started with all jobs")
+    logger.info(
+        "Scheduler started with jobs: "
+        "CSFloat(30min), Buff(daily 3am), Steam history(hourly), "
+        "ByMykel sync(daily 4am), Steam Market sync(weekly Mon 2am), "
+        "Portfolio snapshots(daily 1am)"
+    )
 
 
 def stop_scheduler():
-    """Stop the scheduler gracefully"""
+    """Stop the scheduler gracefully."""
     if scheduler.running:
         scheduler.shutdown()
         logger.info("Scheduler stopped")
-        
