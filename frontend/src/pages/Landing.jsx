@@ -12,7 +12,8 @@ const FEATURES = [
       </svg>
     ),
     title: 'Real Market Data',
-    desc: 'Steam, Buff163, and CSFloat prices updated hourly. Candlestick charts with full price history.',
+    desc: 'Steam, Buff163, and CSFloat prices updated hourly. Area charts with full price history.',
+    comingSoon: false,
   },
   {
     icon: (
@@ -22,6 +23,7 @@ const FEATURES = [
     ),
     title: 'Portfolio Analytics',
     desc: 'P&L tracking, ROI calculations, diversification breakdown, and performance metrics.',
+    comingSoon: false,
   },
   {
     icon: (
@@ -31,6 +33,7 @@ const FEATURES = [
     ),
     title: 'Multi-Currency',
     desc: 'View your portfolio in USD, GBP, EUR and more. Live conversion rates updated daily.',
+    comingSoon: false,
   },
   {
     icon: (
@@ -40,6 +43,7 @@ const FEATURES = [
     ),
     title: 'Price Alerts',
     desc: 'Set target prices and get notified when items hit your buy or sell targets.',
+    comingSoon: true,
   },
   {
     icon: (
@@ -49,6 +53,7 @@ const FEATURES = [
     ),
     title: 'Easy Import',
     desc: 'Import from Steam inventory, CSV, or Excel. Supports Skinport portfolio exports.',
+    comingSoon: true,
   },
   {
     icon: (
@@ -58,6 +63,7 @@ const FEATURES = [
     ),
     title: 'Secure',
     desc: 'Your data is yours. Login with Google or Steam. No trading permissions required.',
+    comingSoon: false,
   },
 ];
 
@@ -98,7 +104,7 @@ export default function Landing() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
             </div>
-            <span className="font-bold tracking-tight">CS2 <span className="text-cyan-400">Tracker</span></span>
+            <span className="font-bold tracking-tight">Floatbase</span>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -136,7 +142,7 @@ export default function Landing() {
           </h1>
 
           <p className="text-lg text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-            Real-time candlestick charts, multi-market price data, and portfolio analytics
+            Real-time price data, multi-market tracking, and portfolio analytics
             built for serious CS2 traders.
           </p>
 
@@ -183,8 +189,13 @@ export default function Landing() {
             {FEATURES.map((f) => (
               <div
                 key={f.title}
-                className="group p-6 bg-gray-900/60 border border-gray-800 rounded-2xl hover:border-gray-700 transition-all hover:bg-gray-900/80"
+                className="group relative p-6 bg-gray-900/60 border border-gray-800 rounded-2xl hover:border-gray-700 transition-all hover:bg-gray-900/80"
               >
+                {f.comingSoon && (
+                  <span className="absolute top-4 right-4 text-[10px] px-2 py-0.5 bg-amber-500/15 text-amber-400 border border-amber-500/20 rounded-full font-semibold uppercase tracking-wider">
+                    Coming soon
+                  </span>
+                )}
                 <div className="w-10 h-10 bg-cyan-500/10 rounded-xl flex items-center justify-center text-cyan-400 mb-4 group-hover:bg-cyan-500/15 transition-colors">
                   {f.icon}
                 </div>
@@ -215,10 +226,11 @@ export default function Landing() {
       {/* Footer */}
       <footer className="border-t border-gray-800 py-8 px-6">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-600">
-          <span>© 2026 CS2 Tracker. Not affiliated with Valve Corporation.</span>
+          <span>© 2026 Floatbase. Not affiliated with Valve Corporation.</span>
           <div className="flex gap-6">
             <a href="/privacy" className="hover:text-gray-400 transition-colors">Privacy Policy</a>
             <a href="/terms" className="hover:text-gray-400 transition-colors">Terms of Service</a>
+            <a href="/cookies" className="hover:text-gray-400 transition-colors">Cookie Policy</a>
           </div>
         </div>
       </footer>

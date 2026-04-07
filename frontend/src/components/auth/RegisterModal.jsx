@@ -16,13 +16,11 @@ function RegisterModal({ onClose, onSwitchToLogin }) {
     e.preventDefault();
     setError('');
 
-    // Validate passwords match
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
     }
 
-    // Validate password length
     if (password.length < 8) {
       setError('Password must be at least 8 characters');
       return;
@@ -43,9 +41,7 @@ function RegisterModal({ onClose, onSwitchToLogin }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      {/* Modal */}
       <div className="relative w-full max-w-md bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl">
-        {/* Close button */}
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
@@ -55,25 +51,19 @@ function RegisterModal({ onClose, onSwitchToLogin }) {
           </svg>
         </button>
 
-        {/* Content */}
         <div className="p-8">
           <h2 className="text-3xl font-bold text-white mb-2">Create Account</h2>
           <p className="text-gray-400 mb-8">Start tracking your CS2 investments</p>
 
-          {/* Error message */}
           {error && (
             <div className="mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-lg">
               <p className="text-red-400 text-sm">{error}</p>
             </div>
           )}
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email */}
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Email
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
               <input
                 type="email"
                 value={email}
@@ -84,11 +74,8 @@ function RegisterModal({ onClose, onSwitchToLogin }) {
               />
             </div>
 
-            {/* Username */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Username
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Username</label>
               <input
                 type="text"
                 value={username}
@@ -101,11 +88,8 @@ function RegisterModal({ onClose, onSwitchToLogin }) {
               />
             </div>
 
-            {/* Password */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Password
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
               <input
                 type="password"
                 value={password}
@@ -117,11 +101,8 @@ function RegisterModal({ onClose, onSwitchToLogin }) {
               />
             </div>
 
-            {/* Confirm Password */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Confirm Password
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Confirm Password</label>
               <input
                 type="password"
                 value={confirmPassword}
@@ -133,19 +114,17 @@ function RegisterModal({ onClose, onSwitchToLogin }) {
               />
             </div>
 
-            {/* Submit button */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 disabled:from-gray-600 disabled:to-gray-700 text-white rounded-lg font-semibold transition-all"
+              className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:from-gray-600 disabled:to-gray-700 text-white rounded-lg font-semibold transition-all"
             >
               {loading ? 'Creating account...' : 'Create Account'}
             </button>
           </form>
 
-          {/* Switch to login */}
-          <div className="mt-6 text-center">
-            <p className="text-gray-400">
+          <div className="mt-5 text-center">
+            <p className="text-gray-400 text-sm">
               Already have an account?{' '}
               <button
                 onClick={onSwitchToLogin}
@@ -155,6 +134,14 @@ function RegisterModal({ onClose, onSwitchToLogin }) {
               </button>
             </p>
           </div>
+
+          {/* Consent notice */}
+          <p className="mt-4 text-center text-gray-600 text-xs leading-relaxed">
+            By creating an account, you agree to our{' '}
+            <a href="/terms" className="text-gray-500 hover:text-gray-400 underline" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+            {' '}and{' '}
+            <a href="/privacy" className="text-gray-500 hover:text-gray-400 underline" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
+          </p>
         </div>
       </div>
     </div>

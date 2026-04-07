@@ -41,7 +41,7 @@ function LoginModal({ onClose, onSwitchToRegister }) {
 
         <div className="p-8">
           <h2 className="text-2xl font-bold text-white mb-1">Welcome back</h2>
-          <p className="text-gray-500 text-sm mb-7">Sign in to your CS2 Tracker account</p>
+          <p className="text-gray-500 text-sm mb-7">Sign in to your Floatbase account</p>
 
           {error && (
             <div className="mb-5 p-3 bg-red-500/10 border border-red-500/30 rounded-xl">
@@ -131,6 +131,14 @@ function LoginModal({ onClose, onSwitchToRegister }) {
               </button>
             </p>
           </div>
+
+          {/* Consent notice */}
+          <p className="mt-4 text-center text-gray-600 text-xs leading-relaxed">
+            By continuing, you agree to our{' '}
+            <a href="/terms" className="text-gray-500 hover:text-gray-400 underline" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+            {' '}and{' '}
+            <a href="/privacy" className="text-gray-500 hover:text-gray-400 underline" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
+          </p>
         </div>
       </div>
     </div>
