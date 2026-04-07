@@ -2,9 +2,16 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 
-# Accept build argument
+# Accept build arguments
 ARG VITE_API_URL
+ARG VITE_STRIPE_PUBLISHABLE_KEY
+ARG VITE_STRIPE_MONTHLY_PRICE_ID
+ARG VITE_STRIPE_ANNUAL_PRICE_ID
+
 ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_STRIPE_PUBLISHABLE_KEY=$VITE_STRIPE_PUBLISHABLE_KEY
+ENV VITE_STRIPE_MONTHLY_PRICE_ID=$VITE_STRIPE_MONTHLY_PRICE_ID
+ENV VITE_STRIPE_ANNUAL_PRICE_ID=$VITE_STRIPE_ANNUAL_PRICE_ID
 
 # Copy package files
 COPY package*.json ./
@@ -15,7 +22,7 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build the app (VITE_API_URL is now available)
+# Build the app
 RUN npm run build
 
 # Production stage

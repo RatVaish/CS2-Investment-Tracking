@@ -17,6 +17,8 @@ export default function Navbar() {
   const [currency, setCurrencyState] = useState(getUserCurrency());
   const menuRef = useRef(null);
 
+  const isPro = user?.tier === 'pro';
+
   useEffect(() => {
     const handleClick = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
@@ -46,22 +48,17 @@ export default function Navbar() {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-gray-950/95 backdrop-blur border-b border-gray-800">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-        {/* Logo */}
-        <button
-          onClick={() => navigate('/app')}
-          className="flex items-center gap-2.5 group"
-        >
+        <button onClick={() => navigate('/app')} className="flex items-center gap-2.5 group">
           <div className="w-7 h-7 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-md flex items-center justify-center">
             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
           </div>
           <span className="font-bold text-white tracking-tight">
-            CS2 <span className="text-cyan-400">Tracker</span>
+            Float<span className="text-cyan-400">base</span>
           </span>
         </button>
 
-        {/* Nav tabs */}
         <div className="flex items-center gap-1">
           {NAV_TABS.map(tab => (
             <button
@@ -78,9 +75,19 @@ export default function Navbar() {
           ))}
         </div>
 
-        {/* Right side */}
         <div className="flex items-center gap-3">
-          {/* Currency selector */}
+          {!isPro && (
+            <button
+              onClick={() => navigate('/app/billing')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-sm font-medium hover:bg-cyan-500/20 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3l14 9-14 9V3z" />
+              </svg>
+              Upgrade
+            </button>
+          )}
+
           <select
             value={currency}
             onChange={(e) => handleCurrencyChange(e.target.value)}
@@ -91,7 +98,6 @@ export default function Navbar() {
             ))}
           </select>
 
-          {/* User menu */}
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
@@ -113,23 +119,38 @@ export default function Navbar() {
             </button>
 
             {showUserMenu && (
-              <div className="absolute right-0 top-full mt-2 w-48 bg-gray-900 border border-gray-700 rounded-xl shadow-xl overflow-hidden">
+              <div className="absolute right-0 top-full mt-2 w-52 bg-gray-900 border border-gray-700 rounded-xl shadow-xl overflow-hidden">
                 <div className="px-4 py-3 border-b border-gray-800">
                   <p className="text-white text-sm font-medium">{user?.username}</p>
                   <p className="text-gray-500 text-xs truncate">{user?.email}</p>
-                  <span className="inline-block mt-1 px-2 py-0.5 bg-cyan-500/10 text-cyan-400 text-xs rounded-full border border-cyan-500/20 capitalize">
-                    {user?.tier || 'free'}
+                  <span className={`inline-block mt-1.5 px-2 py-0.5 text-xs rounded-full border capitalize font-medium ${
+                    isPro
+                      ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                      : 'bg-gray-800 text-gray-400 border-gray-700'
+                  }`}>
+                    {isPro ? '⚡ Pro' : 'Free'}
                   </span>
                 </div>
-                <button
-                  onClick={handleLogout}
-                  className="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  Sign out
-                </button>
+                <div className="py-1">
+                  <button
+                    onClick={() => { navigate('/app/billing'); setShowUserMenu(false); }}
+                    className="w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-gray-800 transition-colors flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                    {isPro ? 'Manage Billing' : 'Upgrade to Pro'}
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    Sign out
+                  </button>
+                </div>
               </div>
             )}
           </div>

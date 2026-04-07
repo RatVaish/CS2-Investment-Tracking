@@ -13,12 +13,12 @@ class User(Base):
     # Core identity
     username = Column(String(50), unique=True, nullable=False, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
-    display_name = Column(String(100), nullable=True)  # NEW: shown in UI, separate from username
+    display_name = Column(String(100), nullable=True)
 
-    # Auth — password is null for OAuth-only accounts
+    # Auth
     password_hash = Column(String(255), nullable=True)
 
-    # Google OAuth — NEW
+    # Google OAuth
     google_id = Column(String(255), unique=True, nullable=True, index=True)
 
     # Steam integration
@@ -26,28 +26,32 @@ class User(Base):
     steam_profile_url = Column(String(255), nullable=True)
     avatar_url = Column(String(255), nullable=True)
 
-    # Freemium tier — NEW
+    # Freemium tier
     tier = Column(String(10), nullable=False, default='free')  # 'free' | 'pro'
-    tier_expires_at = Column(TIMESTAMP, nullable=True)          # null = free forever / active pro
+    tier_expires_at = Column(TIMESTAMP, nullable=True)
+
+    # Stripe billing
+    stripe_customer_id = Column(String(255), unique=True, nullable=True, index=True)
+    stripe_subscription_id = Column(String(255), unique=True, nullable=True)
+    subscription_status = Column(String(50), nullable=True)  # active | past_due | canceled | unpaid
 
     # Account status
     is_active = Column(Boolean, default=True, nullable=False)
     email_verified = Column(Boolean, default=False, nullable=False)
 
-    # UI & app preferences — NEW
-    # Stored as JSONB: {"default_market": "buff163", "currency": "USD", "theme": "dark"}
+    # UI preferences
     preferences = Column(JSONB, nullable=True, default=dict)
 
-    # Consent tracking — NEW
+    # Consent tracking
     steam_data_consent = Column(Boolean, default=False, nullable=False)
     steam_data_consent_at = Column(TIMESTAMP, nullable=True)
     terms_accepted_at = Column(TIMESTAMP, nullable=True)
     privacy_policy_accepted_at = Column(TIMESTAMP, nullable=True)
 
-    # GDPR right to erasure — NEW
+    # GDPR
     data_export_requested_at = Column(TIMESTAMP, nullable=True)
     deletion_requested_at = Column(TIMESTAMP, nullable=True)
-    deletion_scheduled_at = Column(TIMESTAMP, nullable=True)  # 30 days after request
+    deletion_scheduled_at = Column(TIMESTAMP, nullable=True)
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

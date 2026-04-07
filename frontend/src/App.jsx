@@ -1,55 +1,31 @@
-import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
-import { useAuth } from './contexts/AuthContext';
-import Landing from './pages/Landing';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import TabLayout from './components/TabLayout';
+import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
-import InvestmentDetail from './pages/InvestmentDetail';
-import GoogleCallback from './pages/GoogleCallback';
+import Manage from './pages/Manage';
+import Portfolio from './pages/Portfolio';
+import Privacy from './pages/Privacy';
+import Terms from './pages/Terms';
+import Cookies from './pages/Cookies';
 
 function App() {
-  const { isAuthenticated, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-gray-400 text-sm font-mono">Loading...</span>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <>
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          style: {
-            background: '#1e293b',
-            color: '#f1f5f9',
-            border: '1px solid #334155',
-            fontFamily: 'DM Sans, sans-serif',
-          },
-          success: { iconTheme: { primary: '#06b6d4', secondary: '#0f172a' } },
-          error: { iconTheme: { primary: '#ef4444', secondary: '#0f172a' } },
-        }}
-      />
+    <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/auth/callback" element={<GoogleCallback />} />
-        <Route
-          path="/app/*"
-          element={isAuthenticated ? <Dashboard /> : <Navigate to="/" replace />}
-        />
-        <Route
-          path="/investments/:id"
-          element={isAuthenticated ? <InvestmentDetail /> : <Navigate to="/" replace />}
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        {/* Main app with navbar/tab layout */}
+        <Route path="/" element={<TabLayout />}>
+          <Route index element={<Home />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="manage" element={<Manage />} />
+          <Route path="portfolio" element={<Portfolio />} />
+        </Route>
+
+        {/* Legal pages — standalone, no TabLayout */}
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/cookies" element={<Cookies />} />
       </Routes>
-    </>
+    </BrowserRouter>
   );
 }
 

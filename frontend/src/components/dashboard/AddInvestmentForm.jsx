@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { investmentsAPI } from '../../api/investments';
 import { formatCurrency } from '../../utils/currency';
 import ItemSearchSelect from '../ItemSearchSelect';
+import PaywallModal from '../PaywallModal';
 
 export default function AddInvestmentForm() {
   const navigate = useNavigate();
@@ -17,6 +18,7 @@ export default function AddInvestmentForm() {
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
 
   const handleItemSelect = (itemId, itemData) => {
     setSelectedItem(itemData);
@@ -24,7 +26,6 @@ export default function AddInvestmentForm() {
     setForm(prev => ({
       ...prev,
       item_id: itemId,
-      // Auto-fill purchase price from Steam price if field is empty
       purchase_price: prev.purchase_price === '' && steamPrice
         ? steamPrice.toFixed(2)
         : prev.purchase_price,
@@ -62,7 +63,11 @@ export default function AddInvestmentForm() {
       toast.success('Investment added');
       navigate(`/investments/${inv.id}`);
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to add investment');
+      if (err.response?.status === 403) {
+        setShowPaywall(true);
+      } else {
+        toast.error(err.response?.data?.detail || 'Failed to add investment');
+      }
     } finally {
       setLoading(false);
     }
@@ -78,6 +83,7 @@ export default function AddInvestmentForm() {
 
   return (
     <div className="max-w-xl">
+      {showPaywall && <PaywallModal onClose={() => setShowPaywall(false)} />}
       <div className="mb-6">
         <h2 className="text-xl font-bold text-white">Add Investment</h2>
         <p className="text-gray-600 text-sm mt-1">Track a new item in your portfolio</p>

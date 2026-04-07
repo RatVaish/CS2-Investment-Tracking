@@ -16,7 +16,7 @@ function TabLayout() {
   });
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#111827' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#111827', display: 'flex', flexDirection: 'column' }}>
       {/* Top Navigation Bar */}
       {!isHome && (
         <nav style={{
@@ -92,12 +92,45 @@ function TabLayout() {
 
       {/* Main Content */}
       <div style={{
+        flex: 1,
         maxWidth: '1280px',
+        width: '100%',
         margin: '0 auto',
         padding: isHome ? '80px 64px' : '64px 64px'
       }}>
         <Outlet />
       </div>
+
+      {/* Footer */}
+      <footer style={{
+        borderTop: '1px solid #1f2937',
+        padding: '24px 64px',
+        textAlign: 'center',
+        color: '#6b7280',
+        fontSize: '12px'
+      }}>
+        <div style={{ marginBottom: '8px' }}>
+          <a href="/privacy" style={{ color: '#6b7280', textDecoration: 'none', marginRight: '20px' }}
+            onMouseOver={(e) => e.target.style.color = '#9ca3af'}
+            onMouseOut={(e) => e.target.style.color = '#6b7280'}
+          >
+            Privacy Policy
+          </a>
+          <a href="/terms" style={{ color: '#6b7280', textDecoration: 'none', marginRight: '20px' }}
+            onMouseOver={(e) => e.target.style.color = '#9ca3af'}
+            onMouseOut={(e) => e.target.style.color = '#6b7280'}
+          >
+            Terms of Service
+          </a>
+          <a href="/cookies" style={{ color: '#6b7280', textDecoration: 'none' }}
+            onMouseOver={(e) => e.target.style.color = '#9ca3af'}
+            onMouseOut={(e) => e.target.style.color = '#6b7280'}
+          >
+            Cookie Policy
+          </a>
+        </div>
+        <div>© 2026 Floatbase. All rights reserved.</div>
+      </footer>
     </div>
   );
 }

@@ -32,7 +32,7 @@ def get_portfolio_summary(
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    """Portfolio totals — invested, current value, P&L, ROI."""
+    """Portfolio totals."""
     return crud_investment.get_portfolio_summary(db, user_id=current_user.id)
 
 
@@ -57,7 +57,14 @@ def create_investment(
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    """Add a new investment."""
+    """Add a new investment. Free tier limited to 10 investments."""
+    if current_user.tier == "free":
+        current_count = crud_investment.count_active_investments(db, user_id=current_user.id)
+        if current_count >= 10:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Free tier limit reached. Upgrade to Pro for unlimited investments.",
+            )
     return crud_investment.create_investment(
         db, investment=investment, user_id=current_user.id
     )
@@ -108,3 +115,4 @@ def delete_investment(
     """Delete an investment."""
     if not crud_investment.delete_investment(db, investment_id, current_user.id):
         raise HTTPException(status_code=404, detail="Investment not found")
+

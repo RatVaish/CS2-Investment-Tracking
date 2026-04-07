@@ -30,6 +30,8 @@ class UserInDB(UserBase):
     avatar_url: Optional[str] = None
     is_active: bool
     email_verified: bool
+    tier: str = 'free'
+    subscription_status: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     last_login: Optional[datetime] = None

@@ -5,9 +5,9 @@ load_dotenv()
 
 
 class Settings:
-    PROJECT_NAME: str = "CS2 Investment Tracker"
+    PROJECT_NAME: str = "Floatbase"
     VERSION: str = "2.0.0"
-    DESCRIPTION: str = "Track your Counter-Strike 2 item investments with real-time pricing"
+    DESCRIPTION: str = "The home base for CS2 float data and investment tracking"
     DEBUG: bool = os.getenv("DEBUG", "False") == "True"
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
@@ -20,7 +20,7 @@ class Settings:
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # CORS — read from env so docker-compose can set it, fallback to common dev origins
+    # CORS
     @property
     def ALLOWED_ORIGINS(self) -> list:
         origins_env = os.getenv("ALLOWED_ORIGINS", "")
@@ -30,10 +30,7 @@ class Settings:
             "http://localhost:5173",
             "http://localhost:80",
             "http://localhost",
-            "http://100.95.133.40",
-            "http://100.95.133.40:80",
-            "http://192.168.1.232",
-            "http://192.168.1.232:80",
+            "https://floatbase.app",
         ]
 
     # CSFloat API
@@ -51,6 +48,13 @@ class Settings:
 
     # Buff163
     BUFF_SESSION_COOKIE: str = os.getenv("BUFF_SESSION_COOKIE", "")
+
+    # Stripe
+    STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "")
+    STRIPE_PUBLISHABLE_KEY: str = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
+    STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    STRIPE_MONTHLY_PRICE_ID: str = os.getenv("STRIPE_MONTHLY_PRICE_ID", "")
+    STRIPE_ANNUAL_PRICE_ID: str = os.getenv("STRIPE_ANNUAL_PRICE_ID", "")
 
 
 settings = Settings()

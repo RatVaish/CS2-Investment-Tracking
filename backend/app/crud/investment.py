@@ -211,3 +211,10 @@ def get_portfolio_summary(db: Session, user_id: int) -> dict:
         "priced_investments": len(priced),
         "unpriced_investments": total_investments - len(priced),
     }
+
+def count_active_investments(db: Session, user_id: int) -> int:
+    """Count active investments for free tier enforcement."""
+    return db.query(Investment).filter(
+        Investment.user_id == user_id,
+        Investment.status == "active",
+    ).count()
