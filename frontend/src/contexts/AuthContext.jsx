@@ -1,90 +1,128 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authAPI } from '../api/auth';
+import { getCookie, setCookie, getUserCurrency } from '../api/client';
 
 const AuthContext = createContext(null);
+
+// Token storage helpers — use both localStorage AND a long-lived cookie
+// so sessions survive browser restarts
+const storeTokens = (accessToken, refreshToken, remember = true) => {
+  localStorage.setItem('access_token', accessToken);
+  localStorage.setItem('refresh_token', refreshToken);
+  if (remember) {
+    setCookie('access_token', accessToken, 7);    // 7 days
+    setCookie('refresh_token', refreshToken, 30); // 30 days
+  }
+};
+
+const clearTokens = () => {
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  // Clear cookies too
+  document.cookie = 'access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+  document.cookie = 'refresh_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+};
+
+const getStoredToken = () => {
+  // Check localStorage first, then cookie fallback
+  return localStorage.getItem('access_token') || getCookie('access_token');
+};
+
+const getStoredRefreshToken = () => {
+  return localStorage.getItem('refresh_token') || getCookie('refresh_token');
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Check if user is logged in on mount
+  const fetchAndSetUser = useCallback(async () => {
+    try {
+      const userData = await authAPI.getProfile();
+      setUser(userData);
+      return userData;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // On mount: restore session from stored tokens, dispatch currency event
   useEffect(() => {
     const checkAuth = async () => {
-      const token = localStorage.getItem('access_token');
+      // Restore token from cookie if localStorage is empty (new tab/browser restart)
+      const cookieToken = getCookie('access_token');
+      if (cookieToken && !localStorage.getItem('access_token')) {
+        localStorage.setItem('access_token', cookieToken);
+      }
+      const cookieRefresh = getCookie('refresh_token');
+      if (cookieRefresh && !localStorage.getItem('refresh_token')) {
+        localStorage.setItem('refresh_token', cookieRefresh);
+      }
 
+      const token = getStoredToken();
       if (token) {
-        try {
-          // Fetch current user profile
-          const userData = await authAPI.getProfile();
-          setUser(userData);
-        } catch (error) {
-          // Token is invalid or expired
-          console.error('Auth check failed:', error);
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-        }
+        await fetchAndSetUser();
       }
 
       setLoading(false);
+
+      // Dispatch currency event so Navbar updates without refresh
+      const currency = getUserCurrency();
+      window.dispatchEvent(new CustomEvent('currencychange', { detail: currency }));
     };
 
     checkAuth();
-  }, []);
+  }, [fetchAndSetUser]);
 
-  const login = async (email, password) => {
+  const login = async (email, password, remember = true) => {
     try {
       const response = await authAPI.login(email, password);
-
-      // Store tokens
-      localStorage.setItem('access_token', response.access_token);
-      localStorage.setItem('refresh_token', response.refresh_token);
-
-      // Fetch user profile
-      const userData = await authAPI.getProfile();
-      setUser(userData);
-
-      return { success: true };
+      storeTokens(response.access_token, response.refresh_token, remember);
+      const userData = await fetchAndSetUser();
+      return { success: true, user: userData };
     } catch (error) {
-      console.error('Login failed:', error);
       return {
         success: false,
-        error: error.response?.data?.detail || 'Login failed'
+        error: error.response?.data?.detail || 'Login failed',
       };
     }
+  };
+
+  // Called after OAuth (Google/Steam) — tokens already stored by callback page
+  const loginWithTokens = async (accessToken, refreshToken, remember = true) => {
+    storeTokens(accessToken, refreshToken, remember);
+    const userData = await fetchAndSetUser();
+    return { success: !!userData, user: userData };
   };
 
   const register = async (email, username, password) => {
     try {
       await authAPI.register(email, username, password);
-
-      // Auto-login after registration
       return await login(email, password);
     } catch (error) {
-      console.error('Registration failed:', error);
       return {
         success: false,
-        error: error.response?.data?.detail || 'Registration failed'
+        error: error.response?.data?.detail || 'Registration failed',
       };
     }
   };
 
   const logout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
+    clearTokens();
     setUser(null);
   };
 
-  const value = {
-    user,
-    login,
-    register,
-    logout,
-    isAuthenticated: !!user,
-    loading
-  };
-
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{
+      user,
+      login,
+      loginWithTokens,
+      register,
+      logout,
+      isAuthenticated: !!user,
+      loading,
+      refreshUser: fetchAndSetUser,
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -92,8 +130,6 @@ export const AuthProvider = ({ children }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 };

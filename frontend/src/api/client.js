@@ -1,70 +1,68 @@
 import axios from 'axios';
 
-// Use environment variable or fallback to localhost
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
 
+// ─── Cookie helpers ────────────────────────────────────────────────────────────
+export const getCookie = (name) => {
+  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+  return match ? decodeURIComponent(match[2]) : null;
+};
+
+export const setCookie = (name, value, days = 365) => {
+  const expires = new Date(Date.now() + days * 864e5).toUTCString();
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+};
+
+// ─── Timezone & Currency init ─────────────────────────────────────────────────
+if (!getCookie('timezone')) {
+  setCookie('timezone', Intl.DateTimeFormat().resolvedOptions().timeZone);
+}
+if (!getCookie('currency')) {
+  setCookie('currency', 'USD');
+}
+
+export const getUserCurrency = () => getCookie('currency') || 'USD';
+export const getUserTimezone = () => getCookie('timezone') || 'UTC';
+export const setUserCurrency = (currency) => setCookie('currency', currency);
+
+// ─── Axios client ─────────────────────────────────────────────────────────────
 const client = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json'
-  }
+  headers: { 'Content-Type': 'application/json' },
 });
 
-// Add JWT token to all requests automatically
-client.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
+// Attach JWT from localStorage on every request
+client.interceptors.request.use((config) => {
+  const token = localStorage.getItem('access_token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
 
-// Handle 401 errors with automatic token refresh
+// Auto-refresh on 401
 client.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
-
-    // If 401 and we haven't tried to refresh yet
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-
+    const original = error.config;
+    if (error.response?.status === 401 && !original._retry) {
+      original._retry = true;
       try {
         const refreshToken = localStorage.getItem('refresh_token');
         if (refreshToken) {
-          // Try to refresh the token using the base URL
-          const response = await axios.post(
-            `${API_BASE_URL}/auth/refresh`,
-            { refresh_token: refreshToken }
-          );
-
-          const { access_token, refresh_token: new_refresh_token } = response.data;
-
-          // Store new tokens
+          const res = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+            refresh_token: refreshToken,
+          });
+          const { access_token, refresh_token: newRefresh } = res.data;
           localStorage.setItem('access_token', access_token);
-          localStorage.setItem('refresh_token', new_refresh_token);
-
-          // Update the authorization header
-          originalRequest.headers.Authorization = `Bearer ${access_token}`;
-
-          // Retry the original request
-          return client(originalRequest);
+          localStorage.setItem('refresh_token', newRefresh);
+          original.headers.Authorization = `Bearer ${access_token}`;
+          return client(original);
         }
-      } catch (refreshError) {
-        // Refresh failed - logout
+      } catch {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         window.location.href = '/';
-        return Promise.reject(refreshError);
       }
     }
-
-    // Other errors or refresh failed
     return Promise.reject(error);
   }
 );

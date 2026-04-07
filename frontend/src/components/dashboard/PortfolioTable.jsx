@@ -1,385 +1,346 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { investmentsAPI } from '../../api/investments';
+import { formatCurrency, formatCNY } from '../../utils/currency';
 
-function PortfolioTable() {
+const SORT_KEYS = {
+  name: (a, b) => (a.item?.market_hash_name || '').localeCompare(b.item?.market_hash_name || ''),
+  value: (a, b) => (b.current_value || 0) - (a.current_value || 0),
+  pnl: (a, b) => (b.profit_loss || 0) - (a.profit_loss || 0),
+  roi: (a, b) => (b.roi || 0) - (a.roi || 0),
+  invested: (a, b) => b.total_invested - a.total_invested,
+};
+
+function RarityBadge({ rarity }) {
+  const colors = {
+    'Consumer Grade': 'text-gray-400 bg-gray-800',
+    'Industrial Grade': 'text-blue-400 bg-blue-900/30',
+    'Mil-Spec Grade': 'text-blue-400 bg-blue-900/30',
+    'Restricted': 'text-purple-400 bg-purple-900/30',
+    'Classified': 'text-pink-400 bg-pink-900/30',
+    'Covert': 'text-red-400 bg-red-900/30',
+    'Contraband': 'text-amber-400 bg-amber-900/30',
+    'Extraordinary': 'text-amber-400 bg-amber-900/30',
+  };
+  const cls = colors[rarity] || 'text-gray-500 bg-gray-800';
+  return (
+    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${cls}`}>
+      {rarity || '—'}
+    </span>
+  );
+}
+
+export default function PortfolioTable() {
+  const navigate = useNavigate();
   const [investments, setInvestments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [expandedRow, setExpandedRow] = useState(null);
-  const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({});
+  const [sortKey, setSortKey] = useState('value');
+  const [sortDir, setSortDir] = useState(1);
+  const [filter, setFilter] = useState('active');
+  const [search, setSearch] = useState('');
+  const [deleting, setDeleting] = useState(null);
 
-  useEffect(() => {
-    fetchInvestments();
-  }, []);
-
-  const fetchInvestments = async () => {
+  const fetchInvestments = useCallback(async () => {
     try {
-      const data = await investmentsAPI.getAll();
+      const data = await investmentsAPI.getAll(filter);
       setInvestments(data);
-      setError('');
     } catch (err) {
-      console.error('Failed to fetch investments:', err);
-      setError('Failed to load investments');
+      toast.error('Failed to load investments');
     } finally {
       setLoading(false);
     }
+  }, [filter]);
+
+  useEffect(() => { fetchInvestments(); }, [fetchInvestments]);
+
+  useEffect(() => {
+    const handler = () => fetchInvestments();
+    window.addEventListener('currencychange', handler);
+    return () => window.removeEventListener('currencychange', handler);
+  }, [fetchInvestments]);
+
+  const handleSort = (key) => {
+    if (sortKey === key) setSortDir(d => d * -1);
+    else { setSortKey(key); setSortDir(1); }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this investment?')) {
-      return;
-    }
-
+  const handleDelete = async (e, id) => {
+    e.stopPropagation();
+    if (!confirm('Delete this investment?')) return;
+    setDeleting(id);
     try {
       await investmentsAPI.delete(id);
-      setInvestments(investments.filter(inv => inv.id !== id));
-    } catch (err) {
-      console.error('Failed to delete investment:', err);
-      alert('Failed to delete investment');
+      setInvestments(prev => prev.filter(inv => inv.id !== id));
+      toast.success('Investment deleted');
+    } catch {
+      toast.error('Failed to delete');
+    } finally {
+      setDeleting(null);
     }
   };
 
-  const startEdit = (investment) => {
-    setEditingId(investment.id);
-    setEditForm({
-      purchase_price: investment.purchase_price,
-      quantity: investment.quantity,
-      notes: investment.notes || ''
-    });
-  };
+  const filtered = investments
+    .filter(inv => {
+      if (!search) return true;
+      return (inv.item?.market_hash_name || '').toLowerCase().includes(search.toLowerCase());
+    })
+    .sort((a, b) => (SORT_KEYS[sortKey]?.(a, b) || 0) * sortDir);
 
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditForm({});
-  };
+  const totalValue = filtered.reduce((s, inv) => s + (inv.current_value || 0), 0);
+  const totalInvested = filtered.reduce((s, inv) => s + inv.total_invested, 0);
+  const totalPnl = filtered.reduce((s, inv) => s + (inv.profit_loss || 0), 0);
 
-  const saveEdit = async (id) => {
-    try {
-      await investmentsAPI.update(id, editForm);
-      await fetchInvestments(); // Refetch to get updated data with recalculated P&L
-      setEditingId(null);
-      setEditForm({});
-    } catch (err) {
-      console.error('Failed to update investment:', err);
-      alert('Failed to update investment');
-    }
-  };
-
-  const toggleExpand = (id) => {
-    setExpandedRow(expandedRow === id ? null : id);
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
+  const SortIcon = ({ col }) => (
+    <svg
+      className={`w-3 h-3 inline ml-1 transition-colors ${sortKey === col ? 'text-cyan-400' : 'text-gray-700'}`}
+      fill="none" viewBox="0 0 24 24" stroke="currentColor"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d={sortKey === col && sortDir === -1 ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"}
+      />
+    </svg>
+  );
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-gray-400">Loading investments...</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-4 bg-red-500/10 border border-red-500/50 rounded-lg">
-        <p className="text-red-400">{error}</p>
-      </div>
-    );
-  }
-
-  if (investments.length === 0) {
-    return (
-      <div className="bg-gray-800 border border-gray-700 rounded-xl p-12 text-center">
-        <p className="text-gray-400 text-lg mb-4">No investments yet</p>
-        <p className="text-gray-500">Add your first investment to get started</p>
+      <div className="flex items-center justify-center py-20">
+        <div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold text-white mb-6">Portfolio Holdings</h2>
+    <div className="space-y-4">
+      {/* Header + controls */}
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-white">Portfolio Holdings</h2>
+          <p className="text-gray-500 text-sm mt-0.5">{filtered.length} investments · Click any row to view chart</p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {/* Status filter */}
+          <div className="flex bg-gray-800 rounded-xl p-1 gap-1">
+            {['active', 'sold'].map(f => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize ${
+                  filter === f ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+          {/* Search */}
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search items..."
+            className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-xl text-sm text-gray-300 placeholder-gray-600 focus:outline-none focus:border-gray-600 w-44"
+          />
+        </div>
+      </div>
 
-      <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-900/50">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                  Item
-                </th>
-                <th className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                  Purchase Price
-                </th>
-                <th className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                  Current Price
-                </th>
-                <th className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                  Quantity
-                </th>
-                <th className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                  Total Value
-                </th>
-                <th className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                  P&L
-                </th>
-                <th className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                  ROI
-                </th>
-                <th className="px-6 py-4 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-700">
-              {investments.map((investment) => (
-                <React.Fragment key={investment.id}>
-                  {/* Main Row */}
-                  <tr
-                    className="hover:bg-gray-700/30 transition-colors cursor-pointer"
-                    onClick={() => toggleExpand(investment.id)}
+      {/* Summary bar */}
+      {filtered.length > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: 'Total Invested', value: formatCurrency(totalInvested) },
+            { label: 'Current Value', value: formatCurrency(totalValue) },
+            { label: 'P&L', value: `${totalPnl >= 0 ? '+' : ''}${formatCurrency(totalPnl)}`, color: totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400' },
+          ].map(s => (
+            <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
+              <div className="text-xs text-gray-500 mb-1">{s.label}</div>
+              <div className={`font-bold font-mono ${s.color || 'text-white'}`}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {filtered.length === 0 ? (
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-16 text-center">
+          <div className="w-12 h-12 bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <svg className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+          </div>
+          <p className="text-gray-400 font-medium">No investments found</p>
+          <p className="text-gray-600 text-sm mt-1">
+            {search ? 'Try a different search' : 'Add your first investment to get started'}
+          </p>
+        </div>
+      ) : (
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-800">
+                  <th className="px-4 py-3 text-left text-xs text-gray-500 font-medium uppercase tracking-wider">
+                    Item
+                  </th>
+                  <th
+                    onClick={() => handleSort('invested')}
+                    className="px-4 py-3 text-right text-xs text-gray-500 font-medium uppercase tracking-wider cursor-pointer hover:text-gray-300"
                   >
-                    {/* Item Name & Image */}
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={investment.item?.image_url || 'https://via.placeholder.com/48/1f2937/ffffff?text=CS2'}
-                          alt={investment.item?.market_hash_name || 'Item'}
-                          className="w-12 h-12 object-contain bg-gray-900 rounded border border-gray-700"
-                          onError={(e) => {
-                            e.target.src = 'https://via.placeholder.com/48/1f2937/ffffff?text=CS2';
-                          }}
-                        />
-                        <div>
-                          <div className="text-white font-medium">
-                            {investment.item?.market_hash_name || 'Unknown Item'}
+                    Bought <SortIcon col="invested" />
+                  </th>
+                  <th
+                    onClick={() => handleSort('value')}
+                    className="px-4 py-3 text-right text-xs text-gray-500 font-medium uppercase tracking-wider cursor-pointer hover:text-gray-300"
+                  >
+                    Value <SortIcon col="value" />
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs text-gray-500 font-medium uppercase tracking-wider">
+                    Sell For
+                  </th>
+                  <th
+                    onClick={() => handleSort('pnl')}
+                    className="px-4 py-3 text-right text-xs text-gray-500 font-medium uppercase tracking-wider cursor-pointer hover:text-gray-300"
+                  >
+                    P&L <SortIcon col="pnl" />
+                  </th>
+                  <th
+                    onClick={() => handleSort('roi')}
+                    className="px-4 py-3 text-right text-xs text-gray-500 font-medium uppercase tracking-wider cursor-pointer hover:text-gray-300"
+                  >
+                    ROI <SortIcon col="roi" />
+                  </th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800/60">
+                {filtered.map(inv => {
+                  const pnlPos = (inv.profit_loss || 0) >= 0;
+                  const csfloatPrice = inv.prices?.csfloat?.price;
+                  const buffPrice = inv.prices?.buff163?.price;
+
+                  return (
+                    <tr
+                      key={inv.id}
+                      onClick={() => navigate(`/investments/${inv.id}`)}
+                      className="hover:bg-gray-800/40 cursor-pointer transition-colors group"
+                    >
+                      {/* Item */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-gray-800 rounded-lg overflow-hidden shrink-0 border border-gray-700">
+                            {inv.item?.image_url ? (
+                              <img
+                                src={inv.item.image_url}
+                                alt=""
+                                className="w-full h-full object-contain"
+                                onError={(e) => { e.target.style.display = 'none'; }}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-gray-700">
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                </svg>
+                              </div>
+                            )}
                           </div>
-                          <div className="text-gray-500 text-xs">
-                            {investment.item?.item_type || 'Unknown'}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Purchase Price */}
-                    <td className="px-6 py-4 text-right text-white">
-                      {editingId === investment.id ? (
-                        <input
-                          type="number"
-                          value={editForm.purchase_price}
-                          onChange={(e) => setEditForm({...editForm, purchase_price: parseFloat(e.target.value)})}
-                          className="w-24 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-white text-sm text-right"
-                          onClick={(e) => e.stopPropagation()}
-                          step="0.01"
-                          min="0"
-                        />
-                      ) : (
-                        `£${investment.purchase_price.toFixed(2)}`
-                      )}
-                    </td>
-
-                    {/* Current Price (CSFloat) */}
-                    <td className="px-6 py-4 text-right">
-                      {investment.csfloat_price?.csfloat_price ? (
-                        <div>
-                          <div className="text-white">
-                            £{investment.csfloat_price.csfloat_price.toFixed(2)}
-                          </div>
-                          <div className="text-xs text-cyan-400">CSFloat</div>
-                        </div>
-                      ) : (
-                        <span className="text-gray-500">-</span>
-                      )}
-                    </td>
-
-                    {/* Quantity */}
-                    <td className="px-6 py-4 text-right text-white">
-                      {editingId === investment.id ? (
-                        <input
-                          type="number"
-                          value={editForm.quantity}
-                          onChange={(e) => setEditForm({...editForm, quantity: parseInt(e.target.value)})}
-                          className="w-16 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-white text-sm text-right"
-                          onClick={(e) => e.stopPropagation()}
-                          min="1"
-                        />
-                      ) : (
-                        investment.quantity
-                      )}
-                    </td>
-
-                    {/* Total Value */}
-                    <td className="px-6 py-4 text-right text-white font-medium">
-                      {investment.csfloat_price?.csfloat_price ? (
-                        `£${(investment.csfloat_price.csfloat_price * investment.quantity).toFixed(2)}`
-                      ) : (
-                        '-'
-                      )}
-                    </td>
-
-                    {/* Profit/Loss */}
-                    <td className="px-6 py-4 text-right">
-                      {investment.profit_loss !== null && investment.profit_loss !== undefined ? (
-                        <span className={`font-medium ${investment.profit_loss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {investment.profit_loss >= 0 ? '+' : ''}£{investment.profit_loss.toFixed(2)}
-                        </span>
-                      ) : (
-                        <span className="text-gray-500">-</span>
-                      )}
-                    </td>
-
-                    {/* ROI */}
-                    <td className="px-6 py-4 text-right">
-                      {investment.roi !== null && investment.roi !== undefined ? (
-                        <span className={`font-medium ${investment.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {investment.roi >= 0 ? '+' : ''}{investment.roi.toFixed(2)}%
-                        </span>
-                      ) : (
-                        <span className="text-gray-500">-</span>
-                      )}
-                    </td>
-
-                    {/* Actions */}
-                    <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                      {editingId === investment.id ? (
-                        <div className="flex justify-end space-x-2">
-                          <button
-                            onClick={() => saveEdit(investment.id)}
-                            className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm transition-colors"
-                          >
-                            Save
-                          </button>
-                          <button
-                            onClick={cancelEdit}
-                            className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-sm transition-colors"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex justify-end space-x-2">
-                          <button
-                            onClick={() => startEdit(investment)}
-                            className="px-3 py-1 bg-cyan-600 hover:bg-cyan-700 text-white rounded text-sm transition-colors"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDelete(investment.id)}
-                            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-
-                  {/* Expanded Row (Details) */}
-                  {expandedRow === investment.id && (
-                    <tr>
-                      <td colSpan="8" className="px-6 py-6 bg-gray-900/50">
-                        <div className="border border-gray-700 rounded-lg p-6">
-                          <h3 className="text-lg font-semibold text-white mb-4">Investment Details</h3>
-                          <div className="grid grid-cols-2 gap-6">
-                            {/* Left Column */}
-                            <div className="space-y-3">
-                              <div className="flex justify-between">
-                                <span className="text-gray-400">Item ID:</span>
-                                <span className="text-white">{investment.item_id}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-400">Purchase Date:</span>
-                                <span className="text-white">{formatDate(investment.purchase_date)}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-400">Total Invested:</span>
-                                <span className="text-white font-medium">
-                                  £{(investment.purchase_price * investment.quantity).toFixed(2)}
-                                </span>
-                              </div>
-
-                              {/* Price Sources */}
-                              <div className="pt-3 border-t border-gray-700">
-                                <span className="text-gray-400 block mb-2">Price Sources:</span>
-                                <div className="space-y-1 text-sm">
-                                  {investment.item?.csfloat_price && (
-                                    <div className="flex justify-between">
-                                      <span className="text-cyan-400">CSFloat:</span>
-                                      <span className="text-white">£{investment.item.csfloat_price.toFixed(2)}</span>
-                                    </div>
-                                  )}
-                                  {investment.item?.buff_price && (
-                                    <div className="flex justify-between">
-                                      <span className="text-orange-400">Buff163:</span>
-                                      <span className="text-white">£{investment.item.buff_price.toFixed(2)}</span>
-                                    </div>
-                                  )}
-                                  {investment.item?.steam_price && (
-                                    <div className="flex justify-between">
-                                      <span className="text-blue-400">Steam:</span>
-                                      <span className="text-white">£{investment.item.steam_price.toFixed(2)}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
+                          <div className="min-w-0">
+                            <div className="text-white text-sm font-medium truncate max-w-[200px]">
+                              {inv.item?.market_hash_name || 'Unknown'}
                             </div>
-
-                            {/* Right Column */}
-                            <div className="space-y-3">
-                              <div className="flex justify-between">
-                                <span className="text-gray-400">Created:</span>
-                                <span className="text-white text-sm">{formatDate(investment.created_at)}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-400">Last Updated:</span>
-                                <span className="text-white text-sm">{formatDate(investment.updated_at)}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Notes */}
-                          {investment.notes && (
-                            <div className="mt-4 pt-4 border-t border-gray-700">
-                              <span className="text-gray-400 block mb-2">Notes:</span>
-                              <p className="text-white text-sm">{investment.notes}</p>
-                            </div>
-                          )}
-
-                          {/* Price Chart Placeholder */}
-                          <div className="mt-6 pt-6 border-t border-gray-700">
-                            <h4 className="text-white font-medium mb-4">7-Day Price History</h4>
-                            <div className="flex items-center justify-center h-48 border border-gray-700 rounded-lg bg-gray-800">
-                              <div className="text-center">
-                                <p className="text-gray-400 mb-2">Price Chart</p>
-                                <p className="text-gray-500 text-sm">
-                                  Coming soon - Candlestick chart with 7 days of price data
-                                </p>
-                              </div>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-gray-600 text-xs">×{inv.quantity}</span>
+                              <RarityBadge rarity={inv.item?.rarity} />
                             </div>
                           </div>
                         </div>
                       </td>
+
+                      {/* Bought */}
+                      <td className="px-4 py-3 text-right">
+                        <div className="text-gray-300 text-sm font-mono">
+                          {formatCurrency(inv.purchase_price)}
+                        </div>
+                        <div className="text-gray-600 text-xs font-mono">
+                          {formatCurrency(inv.total_invested)} total
+                        </div>
+                      </td>
+
+                      {/* Current value (Steam) */}
+                      <td className="px-4 py-3 text-right">
+                        {inv.current_price ? (
+                          <div>
+                            <div className="text-white text-sm font-mono font-medium">
+                              {formatCurrency(inv.current_value)}
+                            </div>
+                            <div className="text-gray-500 text-xs font-mono">
+                              {formatCurrency(inv.current_price)} ea
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-gray-600">—</span>
+                        )}
+                      </td>
+
+                      {/* Sell for (CSFloat + Buff) */}
+                      <td className="px-4 py-3 text-right">
+                        <div className="space-y-0.5">
+                          {csfloatPrice && (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <span className="text-[10px] text-cyan-600 font-medium">CF</span>
+                              <span className="text-gray-300 text-xs font-mono">{formatCurrency(csfloatPrice)}</span>
+                            </div>
+                          )}
+                          {buffPrice && (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <span className="text-[10px] text-orange-600 font-medium">B</span>
+                              <span className="text-gray-500 text-xs font-mono">{formatCNY(buffPrice)}</span>
+                            </div>
+                          )}
+                          {!csfloatPrice && !buffPrice && <span className="text-gray-600">—</span>}
+                        </div>
+                      </td>
+
+                      {/* P&L */}
+                      <td className="px-4 py-3 text-right">
+                        {inv.profit_loss !== null ? (
+                          <span className={`text-sm font-mono font-medium ${pnlPos ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {pnlPos ? '+' : ''}{formatCurrency(inv.profit_loss)}
+                          </span>
+                        ) : <span className="text-gray-600">—</span>}
+                      </td>
+
+                      {/* ROI */}
+                      <td className="px-4 py-3 text-right">
+                        {inv.roi !== null ? (
+                          <span className={`text-sm font-mono font-medium ${inv.roi >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {inv.roi >= 0 ? '+' : ''}{inv.roi.toFixed(2)}%
+                          </span>
+                        ) : <span className="text-gray-600">—</span>}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end">
+                          <button
+                            onClick={(e) => handleDelete(e, inv.id)}
+                            disabled={deleting === inv.id}
+                            className="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-600 hover:text-red-400 transition-colors"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                          <svg className="w-3.5 h-3.5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                      </td>
                     </tr>
-                  )}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
-
-export default PortfolioTable;

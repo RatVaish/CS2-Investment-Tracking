@@ -366,20 +366,24 @@ def process_item(
 ) -> dict:
     """
     Fetch Steam price history for one item and upsert candles.
+    Sets item.last_synced_at so the hourly job picks it up going forward.
     Returns stats dict.
     """
     raw_data = fetch_item_price_history(item.market_hash_name, session)
 
     if not raw_data:
-        return {"inserted": 0, "updated": 0, "skipped": 0, "no_data": True}
+        return {"inserted": 0, "updated": 0, "no_data": True}
 
     candles = build_candles(raw_data, now)
     stats = upsert_candles(db, item.id, "steam", candles)
 
     # Update current price from most recent data point
-    if raw_data:
-        latest_dt, latest_price, latest_volume = raw_data[-1]
-        update_current_price(db, item.id, "steam", latest_price, latest_volume)
+    latest_dt, latest_price, latest_volume = raw_data[-1]
+    update_current_price(db, item.id, "steam", latest_price, latest_volume)
+
+    # Register item for hourly updates
+    item.last_synced_at = now
+    db.commit()
 
     stats["no_data"] = False
     return stats
@@ -477,19 +481,24 @@ def run_backfill(
 
 def run_hourly_update(db: Session) -> dict:
     """
-    Hourly job — fetch latest Steam price history for all active items
-    and upsert any new candles since last run.
+    Hourly job — fetch latest Steam price history for tracked items only.
 
-    This is the ongoing job that runs every hour after backfill is complete.
-    It fetches the full history each time but upsert logic means only
-    new/changed candles get written.
+    Only processes items where last_synced_at IS NOT NULL,
+    meaning they've been viewed at least once and have existing candle data.
+    New items get added to tracking automatically when a user first opens them
+    via the on-demand backfill in the price-history endpoint.
     """
     logger.info("Starting hourly Steam price history update")
     now = datetime.utcnow()
     session = make_session()
 
-    items = db.query(Item).filter(Item.is_active == True).all()
-    logger.info(f"Updating {len(items)} items")
+    # Only update items that have been synced before (tracked items)
+    items = db.query(Item).filter(
+        Item.is_active == True,
+        Item.last_synced_at.isnot(None),
+    ).all()
+
+    logger.info(f"Updating {len(items)} tracked items")
 
     total_stats = {
         "processed": 0,
@@ -505,6 +514,11 @@ def run_hourly_update(db: Session) -> dict:
             total_stats["inserted"] += stats.get("inserted", 0)
             total_stats["updated"] += stats.get("updated", 0)
 
+            # Update last_synced_at so we know when this item was last topped up
+            item.last_synced_at = now
+            if i % 100 == 0:
+                db.commit()
+
             if i % 500 == 0 and i > 0:
                 logger.info(
                     f"Progress: {i}/{len(items)} | "
@@ -519,5 +533,6 @@ def run_hourly_update(db: Session) -> dict:
             total_stats["errors"] += 1
             time.sleep(REQUEST_DELAY)
 
+    db.commit()
     logger.info(f"Hourly update complete: {total_stats}")
     return total_stats

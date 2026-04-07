@@ -106,8 +106,31 @@ def job_item_sync_steam_market():
     finally:
         db.close()
 
-
 def job_portfolio_snapshots():
+    """Daily portfolio snapshots."""
+    logger.info("JOB: Portfolio snapshots starting")
+    db = SessionLocal()
+    try:
+        from app.services.portfolio_snapshot import run_daily_snapshots
+        result = run_daily_snapshots(db)
+        logger.info(f"JOB: Portfolio snapshots complete: {result}")
+    except Exception as e:
+        logger.error(f"JOB: Portfolio snapshots failed: {e}")
+    finally:
+        db.close()
+
+def job_update_exchange_rates():
+    """Fetch daily exchange rates from Frankfurter API (daily 6am UTC)."""
+    logger.info("JOB: Exchange rate update starting")
+    db = SessionLocal()
+    try:
+        from app.services.exchange_rate_service import run_exchange_rate_update
+        result = run_exchange_rate_update(db)
+        logger.info(f"JOB: Exchange rate update complete: {result}")
+    except Exception as e:
+        logger.error(f"JOB: Exchange rate update failed: {e}")
+    finally:
+        db.close()
     """
     Daily portfolio snapshots.
     One row per user per day in portfolio_snapshots table.
@@ -174,6 +197,14 @@ def start_scheduler():
         replace_existing=True,
     )
 
+    # Exchange rates — daily at 6am UTC (after ECB publishes)
+    scheduler.add_job(
+        job_update_exchange_rates,
+        CronTrigger(hour=6, minute=0),
+        id="update_exchange_rates",
+        replace_existing=True,
+    )
+
     # Portfolio snapshots — daily at 1am UTC
     scheduler.add_job(
         job_portfolio_snapshots,
@@ -187,7 +218,7 @@ def start_scheduler():
         "Scheduler started with jobs: "
         "CSFloat(30min), Buff(daily 3am), Steam history(hourly), "
         "ByMykel sync(daily 4am), Steam Market sync(weekly Mon 2am), "
-        "Portfolio snapshots(daily 1am)"
+        "Exchange rates(daily 6am), Portfolio snapshots(daily 1am)"
     )
 
 

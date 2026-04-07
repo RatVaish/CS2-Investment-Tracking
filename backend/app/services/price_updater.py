@@ -1,18 +1,23 @@
+"""
+Price Updater — orchestrates price updates from all sources.
+CSFloat: bulk price-list, every 30 minutes.
+Buff/Steam: delegated to their dedicated clients.
+All writes use V4 row-per-market item_prices structure.
+"""
+import logging
+from datetime import datetime
+from typing import Optional
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta, date
-from typing import List, Optional
-from app.models.item import Item
+
 from app.models.item_price import ItemPrice
-from app.models.price_history import PriceHistory
+from app.models.price_update_log import PriceUpdateLog
 from app.services.csfloat_client import CSFloatClient
 from app.services.item_manager import ItemManager
-import logging
 
 logger = logging.getLogger(__name__)
 
 
 class PriceUpdater:
-    """Service for updating item prices from various sources"""
 
     def __init__(self, db: Session):
         self.db = db
@@ -20,177 +25,107 @@ class PriceUpdater:
         self.item_manager = ItemManager(db)
 
     def update_csfloat_prices(self):
-        """
-        Update CSFloat prices for ALL active items using bulk price-list endpoint
-        Records DAILY candles (not hourly). Runs every 30 minutes but updates same-day candle.
-        """
-        logger.info("Starting CSFloat price update for all items")
+        """Fetch CSFloat bulk price list and update item_prices (V4)."""
+        logger.info("Starting CSFloat price update")
+        start_time = datetime.utcnow()
+        stats = {"updated": 0, "skipped": 0, "errors": 0}
 
         try:
-            # Get full price list from CSFloat
             price_data = self.csfloat.get_price_list()
-            
             if not price_data:
-                logger.error("Failed to fetch CSFloat price list")
+                logger.error("CSFloat returned empty price list")
+                self._log("csfloat", stats, start_time, "failed", error="Empty price list")
                 return
 
             logger.info(f"Fetched {len(price_data)} items from CSFloat")
-
-            # Create price map
             price_map = {item["market_hash_name"]: item for item in price_data}
-
-            # Get all active items
             items = self.item_manager.get_all_active_items()
-            
-            if not items:
-                logger.info("No active items to update")
-                return
-
-            updated_count = 0
-            skipped_count = 0
+            now = datetime.utcnow()
 
             for item in items:
                 try:
-                    # Find price in the bulk data
                     price_info = price_map.get(item.market_hash_name)
-                    
                     if not price_info:
-                        skipped_count += 1
+                        stats["skipped"] += 1
                         continue
 
-                    # Convert to our format
-                    formatted_price = {
-                        'price': price_info['min_price'] / 100.0,  # cents to dollars
-                        'volume': price_info.get('qty', 0),
-                        'updated_at': datetime.utcnow()
-                    }
+                    price = price_info["min_price"] / 100.0
+                    volume = price_info.get("qty", 0)
+                    self._upsert(item.id, "csfloat", price, volume, "USD", now)
+                    stats["updated"] += 1
 
-                    # Update current price
-                    self._update_item_price(item.id, 'csfloat', formatted_price)
-
-                    # Record/update DAILY candle
-                    self._record_daily_price(item.id, 'csfloat', formatted_price)
-
-                    updated_count += 1
-
-                    # Commit every 1000 items
-                    if updated_count % 1000 == 0:
+                    if stats["updated"] % 1000 == 0:
                         self.db.commit()
-                        logger.info(f"Progress: {updated_count} updated, {skipped_count} skipped")
+                        logger.info(f"CSFloat: {stats['updated']} updated, {stats['skipped']} skipped")
 
                 except Exception as e:
-                    logger.error(f"Failed to update price for {item.market_hash_name}: {e}")
+                    logger.error(f"CSFloat price error for {item.market_hash_name}: {e}")
+                    stats["errors"] += 1
 
             self.db.commit()
-            logger.info(f"CSFloat update complete: {updated_count} updated, {skipped_count} skipped")
+            duration = (datetime.utcnow() - start_time).seconds
+            status = "success" if stats["errors"] == 0 else "partial"
+            self._log("csfloat", stats, start_time, status, duration=duration)
+            logger.info(f"CSFloat complete in {duration}s — {stats}")
 
         except Exception as e:
-            logger.error(f"CSFloat price update failed: {e}")
+            logger.error(f"CSFloat update failed: {e}")
             self.db.rollback()
+            self._log("csfloat", stats, start_time, "failed", error=str(e))
         finally:
             self.csfloat.close()
 
     def update_buff_prices(self):
-        """Update Buff163 prices for all items"""
-        logger.info("Buff price updates not yet implemented")
-        pass
+        """Delegate to buff_client."""
+        from app.services.buff_client import run_buff_price_update
+        run_buff_price_update(self.db)
 
     def update_steam_prices(self):
-        """Update Steam Market prices for all items (weekly reference)"""
-        logger.info("Steam price updates not yet implemented")
-        pass
+        """Delegate to steam_price_client."""
+        from app.services.steam_price_client import run_hourly_update
+        run_hourly_update(self.db)
 
-    def _update_item_price(self, item_id: int, source: str, price_data: dict):
-        """Update or create current price record for an item"""
-        item_price = self.db.query(ItemPrice).filter(
-            ItemPrice.item_id == item_id
+    def _upsert(
+        self, item_id: int, market: str, price: float,
+        volume: int, currency: str, now: datetime,
+        lowest_listing: Optional[float] = None,
+        highest_bid: Optional[float] = None,
+    ):
+        """Upsert a V4 item_prices row for (item_id, market)."""
+        existing = self.db.query(ItemPrice).filter(
+            ItemPrice.item_id == item_id,
+            ItemPrice.market == market,
         ).first()
 
-        if not item_price:
-            item_price = ItemPrice(item_id=item_id)
-            self.db.add(item_price)
-
-        # Update based on source
-        if source == 'csfloat':
-            item_price.csfloat_price = price_data.get('price')
-            item_price.csfloat_volume = price_data.get('volume')
-            item_price.csfloat_updated_at = price_data.get('updated_at', datetime.utcnow())
-        elif source == 'buff':
-            item_price.buff_price = price_data.get('price')
-            item_price.buff_volume = price_data.get('volume')
-            item_price.buff_updated_at = price_data.get('updated_at', datetime.utcnow())
-        elif source == 'steam':
-            item_price.steam_price = price_data.get('price')
-            item_price.steam_volume = price_data.get('volume')
-            item_price.steam_updated_at = price_data.get('updated_at', datetime.utcnow())
-
-        item_price.last_updated = datetime.utcnow()
-
-    def _record_daily_price(self, item_id: int, source: str, price_data: dict):
-        """
-        Record/update DAILY OHLC candle
-        Multiple updates in same day will update the candle progressively
-        """
-        today = date.today()
-        price = price_data.get('price')
-
-        if not price:
-            return
-
-        # Check if we have a daily record for today
-        existing = self.db.query(PriceHistory).filter(
-            PriceHistory.item_id == item_id,
-            PriceHistory.source == source,
-            PriceHistory.date == today,
-            PriceHistory.resolution == 'daily'
-        ).first()
-
-        if not existing:
-            # Create new daily candle
-            price_history = PriceHistory(
-                item_id=item_id,
-                source=source,
-                date=today,
-                resolution='daily',
-                open_price=price,
-                high_price=price,
-                low_price=price,
-                close_price=price,
-                volume=price_data.get('volume', 0)
-            )
-            self.db.add(price_history)
+        if existing:
+            existing.price = price
+            existing.volume = volume
+            existing.currency = currency
+            existing.updated_at = now
+            if lowest_listing is not None:
+                existing.lowest_listing = lowest_listing
+            if highest_bid is not None:
+                existing.highest_bid = highest_bid
         else:
-            # Update existing daily OHLC candle
-            existing.high_price = max(existing.high_price or price, price)
-            existing.low_price = min(existing.low_price or price, price)
-            existing.close_price = price  # Most recent price becomes close
-            existing.volume = price_data.get('volume', 0)
+            self.db.add(ItemPrice(
+                item_id=item_id, market=market, price=price,
+                volume=volume, currency=currency,
+                lowest_listing=lowest_listing, highest_bid=highest_bid,
+                updated_at=now,
+            ))
 
-    def compress_old_hourly_data(self):
-        """
-        DEPRECATED - We're now using daily candles directly
-        This job can be removed or repurposed for other cleanup
-        """
-        logger.info("Hourly compression skipped - using daily candles directly")
-        pass
-
-    def get_price_history(self, item_id: int, source: str = 'csfloat', days: int = 30) -> List[PriceHistory]:
-        """
-        Get daily price history for an item
-
-        Args:
-            item_id: Item ID
-            source: Price source
-            days: Number of days of history
-
-        Returns:
-            List of daily PriceHistory records
-        """
-        cutoff_date = date.today() - timedelta(days=days)
-
-        return self.db.query(PriceHistory).filter(
-            PriceHistory.item_id == item_id,
-            PriceHistory.source == source,
-            PriceHistory.date >= cutoff_date,
-            PriceHistory.resolution == 'daily'
-        ).order_by(PriceHistory.date.asc()).all()
+    def _log(self, market, stats, start_time, status, duration=0, error=None):
+        try:
+            self.db.add(PriceUpdateLog(
+                market=market,
+                items_updated=stats.get("updated", 0),
+                items_failed=stats.get("errors", 0),
+                items_skipped=stats.get("skipped", 0),
+                duration_seconds=duration,
+                ran_at=start_time,
+                status=status,
+                error_msg=error,
+            ))
+            self.db.commit()
+        except Exception as e:
+            logger.error(f"Failed to write price_update_log: {e}")

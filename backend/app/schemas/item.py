@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict
 from datetime import date, datetime
 
 
@@ -38,22 +38,38 @@ class Item(ItemBase):
         from_attributes = True
 
 
+class MarketPriceInfo(BaseModel):
+    price: Optional[float] = None
+    currency: str = "USD"
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 class ItemWithPrice(Item):
-    """Item with current price information"""
+    """Item with current prices from all markets (V4)."""
     csfloat_price: Optional[float] = None
     buff_price: Optional[float] = None
     steam_price: Optional[float] = None
+    prices: Optional[Dict[str, Optional[MarketPriceInfo]]] = {}
 
     class Config:
         from_attributes = True
 
 
 class ItemSearchResult(BaseModel):
-    """Lightweight item for search results"""
+    """Lightweight item for search dropdown."""
     id: int
     market_hash_name: str
+    base_name: Optional[str] = None
+    item_type: Optional[str] = None
+    wear: Optional[str] = None
     image_url: Optional[str] = None
+    is_stattrak: bool = False
     csfloat_price: Optional[float] = None
+    buff_price: Optional[float] = None
+    steam_price: Optional[float] = None
 
     class Config:
         from_attributes = True
