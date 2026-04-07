@@ -329,8 +329,8 @@ export default function InvestmentDetail() {
         <div className="max-w-6xl mx-auto flex items-center justify-between text-xs text-gray-700">
           <span>CS2 Tracker · Steam Market, Buff163 & CSFloat</span>
           <div className="flex gap-5">
-            <a href="#" className="hover:text-gray-500">Privacy</a>
-            <a href="#" className="hover:text-gray-500">Terms</a>
+            <a href="/privacy" className="hover:text-gray-500">Privacy</a>
+            <a href="/terms" className="hover:text-gray-500">Terms</a>
           </div>
         </div>
       </footer>

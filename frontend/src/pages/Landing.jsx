@@ -217,8 +217,8 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-600">
           <span>© 2026 CS2 Tracker. Not affiliated with Valve Corporation.</span>
           <div className="flex gap-6">
-            <a href="#" className="hover:text-gray-400 transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-gray-400 transition-colors">Terms of Service</a>
+            <a href="/privacy" className="hover:text-gray-400 transition-colors">Privacy Policy</a>
+            <a href="/terms" className="hover:text-gray-400 transition-colors">Terms of Service</a>
           </div>
         </div>
       </footer>
