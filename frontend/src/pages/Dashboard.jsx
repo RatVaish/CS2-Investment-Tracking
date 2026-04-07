@@ -58,9 +58,9 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-600">
           <span>CS2 Tracker — Prices from Steam Market, Buff163, CSFloat</span>
           <div className="flex gap-5">
-            <a href="#" className="hover:text-gray-400 transition-colors">Privacy</a>
-            <a href="#" className="hover:text-gray-400 transition-colors">Terms</a>
-            <a href="#" className="hover:text-gray-400 transition-colors">Support</a>
+            <a href="/privacy" className="hover:text-gray-400 transition-colors">Privacy</a>
+            <a href="/terms" className="hover:text-gray-400 transition-colors">Terms</a>
+            <a href="mailto:hello@floatbase.app" className="hover:text-gray-400 transition-colors">Support</a>
           </div>
         </div>
       </footer>
