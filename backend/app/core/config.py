@@ -45,6 +45,7 @@ class Settings:
     STEAM_API_KEY: str = os.getenv("STEAM_API_KEY", "")
     STEAM_RETURN_URL: str = os.getenv("STEAM_RETURN_URL", "http://localhost:8000/api/v1/auth/steam/callback")
     STEAM_LOGIN_SECURE: str = os.getenv("STEAM_LOGIN_SECURE", "")
+    STEAM_SESSION_ID: str = os.getenv("STEAM_SESSION_ID", "")
 
     # Buff163
     BUFF_SESSION_COOKIE: str = os.getenv("BUFF_SESSION_COOKIE", "")
@@ -55,6 +56,10 @@ class Settings:
     STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
     STRIPE_MONTHLY_PRICE_ID: str = os.getenv("STRIPE_MONTHLY_PRICE_ID", "")
     STRIPE_ANNUAL_PRICE_ID: str = os.getenv("STRIPE_ANNUAL_PRICE_ID", "")
+
+    # Telegram notifications
+    TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "")
 
 
 settings = Settings()

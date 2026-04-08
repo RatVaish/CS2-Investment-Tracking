@@ -10,9 +10,15 @@ import Billing from './pages/Billing';
 import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
 import Cookies from './pages/Cookies';
+import Import from './pages/Import';
+
+function ProtectedRoute({ children }) {
+  const { isAuthenticated } = useAuth();
+  return isAuthenticated ? children : <Navigate to="/" replace />;
+}
 
 function App() {
-  const { isAuthenticated, loading } = useAuth();
+  const { loading } = useAuth();
 
   if (loading) {
     return (
@@ -34,7 +40,7 @@ function App() {
             background: '#1e293b',
             color: '#f1f5f9',
             border: '1px solid #334155',
-            fontFamily: 'DM Sans, sans-serif',
+            fontFamily: 'system-ui, sans-serif',
           },
           success: { iconTheme: { primary: '#06b6d4', secondary: '#0f172a' } },
           error: { iconTheme: { primary: '#ef4444', secondary: '#0f172a' } },
@@ -43,20 +49,13 @@ function App() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/auth/callback" element={<GoogleCallback />} />
-        <Route
-          path="/app/*"
-          element={isAuthenticated ? <Dashboard /> : <Navigate to="/" replace />}
-        />
-        <Route
-          path="/app/billing"
-          element={isAuthenticated ? <Billing /> : <Navigate to="/" replace />}
-        />
-        <Route
-          path="/investments/:id"
-          element={isAuthenticated ? <InvestmentDetail /> : <Navigate to="/" replace />}
-        />
 
-        {/* Legal pages — public, no auth required */}
+        <Route path="/app/*" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/app/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
+        <Route path="/app/import" element={<ProtectedRoute><Import /></ProtectedRoute>} />
+        <Route path="/investments/:id" element={<ProtectedRoute><InvestmentDetail /></ProtectedRoute>} />
+
+        {/* Legal pages */}
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/cookies" element={<Cookies />} />

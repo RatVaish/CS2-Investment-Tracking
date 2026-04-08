@@ -56,7 +56,7 @@ export default function Dashboard() {
       {/* Footer */}
       <footer className="border-t border-gray-800 py-6 px-6 mt-12">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-600">
-          <span>CS2 Tracker — Prices from Steam Market, Buff163, CSFloat</span>
+          <span>Floatbase — Prices from Steam Market, Buff163 & CSFloat</span>
           <div className="flex gap-5">
             <a href="/privacy" className="hover:text-gray-400 transition-colors">Privacy</a>
             <a href="/terms" className="hover:text-gray-400 transition-colors">Terms</a>

@@ -96,8 +96,9 @@ def fetch_item_price_history(
     """
     Fetch raw price history from Steam for one item.
 
-    Returns list of (datetime, price, volume) tuples sorted oldest first.
-    Returns empty list on failure.
+    Returns:
+        list of (datetime, price, volume) tuples — success (may be empty if item has no history)
+        None — rate limited (caller should back off and retry later)
     """
     try:
         response = session.get(
@@ -112,15 +113,24 @@ def fetch_item_price_history(
         if response.status_code == 429:
             logger.warning(f"Rate limited fetching {market_hash_name}. Waiting 60s...")
             time.sleep(60)
+            # Retry once
             response = session.get(
                 STEAM_HISTORY_URL,
                 params={"appid": 730, "market_hash_name": market_hash_name},
                 timeout=15,
             )
+            if response.status_code == 429:
+                # Still rate limited after retry — signal caller to back off
+                logger.warning(f"Still rate limited after retry for {market_hash_name}")
+                return None
 
         if response.status_code == 400:
             # Item has no Steam Market history (too new, delisted, etc.)
             return []
+
+        if response.status_code == 403:
+            logger.warning(f"403 for {market_hash_name} — steamLoginSecure cookie may be expired")
+            return None  # Treat as rate limit so queue retries
 
         response.raise_for_status()
         data = response.json()
@@ -149,7 +159,7 @@ def fetch_item_price_history(
 
     except requests.exceptions.Timeout:
         logger.error(f"Timeout fetching history for {market_hash_name}")
-        return []
+        return None  # Timeout = retry, not permanent failure
     except Exception as e:
         logger.error(f"Error fetching history for {market_hash_name}: {e}")
         return []
@@ -370,6 +380,9 @@ def process_item(
     Returns stats dict.
     """
     raw_data = fetch_item_price_history(item.market_hash_name, session)
+
+    if raw_data is None:
+        return {"inserted": 0, "updated": 0, "no_data": False, "rate_limited": True}
 
     if not raw_data:
         return {"inserted": 0, "updated": 0, "no_data": True}

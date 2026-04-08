@@ -27,6 +27,36 @@ scheduler = BackgroundScheduler()
 # Job functions
 # ---------------------------------------------------------------------------
 
+def job_steam_health_check():
+    """Daily Steam cookie health check — fires Telegram alert if expired."""
+    logger.info("JOB: Steam health check starting")
+    try:
+        from app.services.health import run_scheduled_health_check
+        result = run_scheduled_health_check()
+        logger.info(f"JOB: Steam health check complete: {result['status']}")
+    except Exception as e:
+        logger.error(f"JOB: Steam health check failed: {e}")
+
+
+def job_backfill_queue():
+    """
+    Process the backfill queue every 2 minutes.
+    Works through items needing Steam price history, one at a time,
+    with proper rate limit handling and retry logic.
+    """
+    logger.info("JOB: Backfill queue starting")
+    db = SessionLocal()
+    try:
+        from app.services.backfill_queue import run_backfill_queue
+        result = run_backfill_queue(db)
+        if result["processed"] > 0:
+            logger.info(f"JOB: Backfill queue complete: {result}")
+    except Exception as e:
+        logger.error(f"JOB: Backfill queue failed: {e}")
+    finally:
+        db.close()
+
+
 def job_update_csfloat_prices():
     """Update CSFloat prices for all items (every 30 minutes)."""
     logger.info("JOB: CSFloat price update starting")
@@ -154,6 +184,24 @@ def job_update_exchange_rates():
 
 def start_scheduler():
     """Initialise and start all scheduled jobs."""
+
+    # Steam health check — every 30 minutes
+    scheduler.add_job(
+        job_steam_health_check,
+        "interval",
+        minutes=30,
+        id="steam_health_check",
+        replace_existing=True,
+    )
+
+    # Backfill queue — every 2 minutes
+    scheduler.add_job(
+        job_backfill_queue,
+        "interval",
+        minutes=2,
+        id="backfill_queue",
+        replace_existing=True,
+    )
 
     # CSFloat — every 30 minutes
     scheduler.add_job(

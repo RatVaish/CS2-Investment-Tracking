@@ -5,6 +5,7 @@ import { investmentsAPI } from '../../api/investments';
 import { formatCurrency } from '../../utils/currency';
 import ItemSearchSelect from '../ItemSearchSelect';
 import PaywallModal from '../PaywallModal';
+import PurchaseDatePicker from './PurchaseDatePicker';
 
 export default function AddInvestmentForm() {
   const navigate = useNavigate();
@@ -73,7 +74,6 @@ export default function AddInvestmentForm() {
     }
   };
 
-  // Live P&L preview
   const purchasePrice = parseFloat(form.purchase_price) || 0;
   const quantity = parseInt(form.quantity) || 1;
   const steamPrice = selectedItem?.steam_price;
@@ -86,12 +86,14 @@ export default function AddInvestmentForm() {
       {showPaywall && <PaywallModal onClose={() => setShowPaywall(false)} />}
       <div className="mb-6">
         <h2 className="text-xl font-bold text-white">Add Investment</h2>
-        <p className="text-gray-600 text-sm mt-1">Track a new item in your portfolio</p>
+        <p className="text-gray-500 text-sm mt-1">
+          Track a new item — set the original purchase date to log historical investments
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3">
 
-        {/* Item search — full width, prominent */}
+        {/* Item search */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
           <p className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wider">Item</p>
           <ItemSearchSelect
@@ -101,7 +103,7 @@ export default function AddInvestmentForm() {
           />
         </div>
 
-        {/* Price + Quantity row */}
+        {/* Price + Quantity */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
             <label className="block text-xs text-gray-500 mb-2 font-medium uppercase tracking-wider">
@@ -120,7 +122,7 @@ export default function AddInvestmentForm() {
             />
             {steamPrice && (
               <p className="text-xs text-gray-600 mt-1.5 font-mono">
-                Steam: {formatCurrency(steamPrice)}
+                Steam now: {formatCurrency(steamPrice)}
               </p>
             )}
             {errors.purchase_price && <p className="text-red-400 text-xs mt-1">{errors.purchase_price}</p>}
@@ -157,13 +159,16 @@ export default function AddInvestmentForm() {
           </div>
         </div>
 
-        {/* P&L preview — only show if we have a steam price to compare against */}
+        {/* P&L preview */}
         {pnl !== null && (
           <div className={`rounded-2xl p-4 border ${pnlPos ? 'border-emerald-500/15 bg-emerald-500/5' : 'border-red-500/15 bg-red-500/5'}`}>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-500 mb-0.5">Estimated P&L at current Steam price</p>
-                <p className="text-xs text-gray-600 font-mono">{formatCurrency(steamPrice)} × {quantity}</p>
+                <p className="text-xs text-gray-600 font-mono">
+                  {formatCurrency(steamPrice)} × {quantity}
+                  {held && held !== 'Today' && <span className="ml-2 text-gray-700">· held {held}</span>}
+                </p>
               </div>
               <div className="text-right">
                 <p className={`text-lg font-bold font-mono ${pnlPos ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -177,19 +182,14 @@ export default function AddInvestmentForm() {
           </div>
         )}
 
-        {/* Date + Notes — collapsed/minimal */}
+        {/* Date + Notes */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-4">
-          <div>
-            <label className="block text-xs text-gray-500 mb-2 font-medium uppercase tracking-wider">
-              Purchase Date
-            </label>
-            <input
-              type="datetime-local"
-              value={form.purchase_date}
-              onChange={set('purchase_date')}
-              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-gray-300 text-sm focus:outline-none focus:border-cyan-500/50 transition-colors"
-            />
-          </div>
+          <PurchaseDatePicker
+            value={form.purchase_date}
+            onChange={(iso) => setForm(prev => ({ ...prev, purchase_date: iso }))}
+            itemId={form.item_id}
+            purchasePrice={parseFloat(form.purchase_price) || 0}
+          />
           <div>
             <label className="block text-xs text-gray-500 mb-2 font-medium uppercase tracking-wider">
               Notes <span className="text-gray-700 normal-case font-normal">(optional)</span>
@@ -204,7 +204,6 @@ export default function AddInvestmentForm() {
           </div>
         </div>
 
-        {/* Submit */}
         <button
           type="submit"
           disabled={loading || !form.item_id}

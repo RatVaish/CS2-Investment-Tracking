@@ -46,6 +46,11 @@ class Item(Base):
     # NEW: Tracks when auto-sync last touched this item
     last_synced_at = Column(TIMESTAMP, nullable=True)
 
+    # Backfill queue — set True when an investment is added for an item with no history
+    needs_backfill = Column(Boolean, nullable=False, default=False)
+    backfill_attempts = Column(Integer, nullable=False, default=0)
+    backfill_queued_at = Column(TIMESTAMP, nullable=True)
+
     # PostgreSQL full-text search vector
     search_vector = Column(TSVECTOR)
 

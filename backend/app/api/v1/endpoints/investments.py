@@ -65,9 +65,17 @@ def create_investment(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Free tier limit reached. Upgrade to Pro for unlimited investments.",
             )
-    return crud_investment.create_investment(
+    inv = crud_investment.create_investment(
         db, investment=investment, user_id=current_user.id
     )
+    _maybe_queue_backfill(db, investment.item_id)
+    return inv
+    """Fire-and-forget backfill queue — called after investment creation."""
+    try:
+        from app.services.backfill_queue import queue_item_for_backfill
+        queue_item_for_backfill(db, item_id)
+    except Exception:
+        pass
 
 
 @router.patch("/{investment_id}", response_model=Investment)
@@ -116,3 +124,55 @@ def delete_investment(
     if not crud_investment.delete_investment(db, investment_id, current_user.id):
         raise HTTPException(status_code=404, detail="Investment not found")
 
+
+@router.get("/by-item/{item_id}")
+def get_investments_by_item(
+        item_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    """
+    All of the current user's positions (active + sold) for a specific item.
+    Used to render trade markers on the price history chart.
+    Returns lightweight trade data only — no full item detail needed.
+    """
+    from app.models.investment import Investment as InvestmentModel
+    rows = db.query(InvestmentModel).filter(
+        InvestmentModel.user_id == current_user.id,
+        InvestmentModel.item_id == item_id,
+    ).order_by(InvestmentModel.purchase_date.asc()).all()
+
+    positions = []
+    for inv in rows:
+        positions.append({
+            "id": inv.id,
+            "status": inv.status,
+            # Entry
+            "purchase_price": inv.purchase_price,
+            "quantity": inv.quantity,
+            "purchase_date": inv.purchase_date.isoformat() if inv.purchase_date else None,
+            "purchase_fee": inv.purchase_fee,
+            # Exit (if sold)
+            "sold_price": inv.sold_price,
+            "sold_at": inv.sold_at.isoformat() if inv.sold_at else None,
+            "sold_fee": inv.sold_fee,
+            # Computed
+            "total_invested": round(inv.purchase_price * inv.quantity, 2),
+            "notes": inv.notes,
+        })
+
+    # Weighted average entry price across all positions
+    total_qty = sum(p["quantity"] for p in positions)
+    avg_entry = (
+        sum(p["purchase_price"] * p["quantity"] for p in positions) / total_qty
+        if total_qty > 0 else None
+    )
+
+    return {
+        "item_id": item_id,
+        "positions": positions,
+        "total_positions": len(positions),
+        "total_quantity": total_qty,
+        "avg_entry_price": round(avg_entry, 4) if avg_entry else None,
+        "is_dca": len(positions) > 1,
+    }
