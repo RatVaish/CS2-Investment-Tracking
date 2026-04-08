@@ -129,11 +129,14 @@ function EntryMarker({ x, y, price, quantity, date, posIdx }) {
       onMouseLeave={() => setHovered(false)}
       style={{ cursor: 'pointer' }}>
       {/* Arrow shaft */}
-      <line x1="0" y1="-28" x2="0" y2="-8" stroke="#10b981" strokeWidth="1.5" />
-      {/* Arrowhead pointing up (entry = buy) */}
-      <polygon points="0,-4 -5,-14 5,-14" fill="#10b981" />
-      {/* Base dot on the price line */}
-      <circle cx="0" cy="0" r="3" fill="#10b981" />
+      <line x1="0" y1="-36" x2="0" y2="-10" stroke="#10b981" strokeWidth="2.5" />
+      {/* Arrowhead pointing up */}
+      <polygon points="0,-4 -7,-18 7,-18" fill="#10b981" />
+      {/* Base dot */}
+      <circle cx="0" cy="0" r="4" fill="#10b981" />
+      {/* Always-visible quantity+price badge */}
+      <rect x="-28" y="-58" width="56" height="18" rx="4" fill="#10b981" fillOpacity="0.15" stroke="#10b981" strokeWidth="0.8" strokeOpacity="0.6" />
+      <text x="0" y="-45" textAnchor="middle" fontSize="9" fontWeight="bold" fill="#10b981" fontFamily="monospace">{label}</text>
 
       {/* Tooltip on hover */}
       {hovered && (
@@ -551,7 +554,7 @@ export default function InvestmentDetail() {
                     stroke="#10b981"
                     strokeDasharray="5 3"
                     strokeOpacity={0.7}
-                    label={{ value: `avg entry ${formatCurrency(avgEntry)}`, position: 'right', fill: '#10b981', fontSize: 9 }}
+                    label={{ value: `▲ avg entry ${formatCurrency(avgEntry)}`, position: 'right', fill: '#10b981', fontSize: 10, fontWeight: 'bold' }}
                   />
                 )}
 
@@ -562,7 +565,7 @@ export default function InvestmentDetail() {
                     stroke="#10b981"
                     strokeDasharray="5 3"
                     strokeOpacity={0.7}
-                    label={{ value: `entry ${formatCurrency(investment.purchase_price)}`, position: 'right', fill: '#10b981', fontSize: 9 }}
+                    label={{ value: `▲ entry ${formatCurrency(investment.purchase_price)}${investment.quantity > 1 ? ` ×${investment.quantity}` : ''}`, position: 'right', fill: '#10b981', fontSize: 10, fontWeight: 'bold' }}
                   />
                 )}
 
