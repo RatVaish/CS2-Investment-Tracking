@@ -29,7 +29,21 @@ RATE_LIMIT_BACKOFF  = 90     # seconds to sleep when Steam 429s us
 MAX_ATTEMPTS        = 5      # give up after this many failed attempts per item
 
 
-def queue_item_for_backfill(db: Session, item_id: int) -> bool:
+def _run_snapshot_backfill_for_user(user_id: int, item_id: int):
+    """Background thread helper — runs snapshot backfill when price history already exists."""
+    from app.db.session import SessionLocal
+    from app.services.snapshot_backfill import backfill_snapshots_for_user
+    db = SessionLocal()
+    try:
+        result = backfill_snapshots_for_user(db, user_id)
+        logger.info(f"Snapshot backfill (existing history) for user {user_id}: {result}")
+    except Exception as e:
+        logger.error(f"Snapshot backfill thread failed for user {user_id}: {e}")
+    finally:
+        db.close()
+
+
+def queue_item_for_backfill(db: Session, item_id: int, user_id: int = None) -> bool:
     """
     Mark an item as needing backfill. Called when a user adds an investment
     for an item that has no Steam price history yet.
@@ -46,7 +60,18 @@ def queue_item_for_backfill(db: Session, item_id: int) -> bool:
     ).first()
 
     if existing:
-        # Already has history — nothing to do
+        # Price history already exists — no Steam fetch needed
+        # but still trigger snapshot backfill for this user directly
+        try:
+            from app.services.snapshot_backfill import backfill_snapshots_for_user
+            import threading
+            threading.Thread(
+                target=_run_snapshot_backfill_for_user,
+                args=(user_id, item_id),
+                daemon=True,
+            ).start()
+        except Exception:
+            pass
         return False
 
     if not item.needs_backfill:
@@ -139,6 +164,17 @@ def run_backfill_queue(db: Session) -> dict:
                 f"{total_candles} candles written"
             )
             stats["succeeded"] += 1
+
+            # Trigger snapshot backfill for all users who have this item
+            try:
+                from app.services.snapshot_backfill import backfill_snapshots_for_user, get_affected_user_ids
+                user_ids = get_affected_user_ids(db, item.id)
+                for uid in user_ids:
+                    result = backfill_snapshots_for_user(db, uid)
+                    logger.info(f"Snapshot backfill for user {uid}: {result}")
+            except Exception as e:
+                logger.error(f"Snapshot backfill failed for item {item.id}: {e}")
+
             time.sleep(DELAY_BETWEEN_ITEMS)
 
         except Exception as e:

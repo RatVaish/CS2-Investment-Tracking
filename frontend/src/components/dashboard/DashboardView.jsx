@@ -126,6 +126,15 @@ export default function DashboardView() {
         last.value = performance.current_value;
       }
     }
+    // No snapshots yet — synthesise a cost basis → current value line so new users see something
+    if (points.length <= 1 && performance.total_invested > 0 && performance.current_value > 0) {
+      const startLabel = 'Cost basis';
+      const todayLabel = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      return [
+        { date: startLabel, value: performance.total_invested },
+        { date: todayLabel, value: performance.current_value },
+      ];
+    }
     return points;
   }, [performance]);
 
@@ -262,7 +271,7 @@ export default function DashboardView() {
         <p className="text-gray-500 text-xs mb-5">
           {hasChartData
             ? `${chartData.length} data points · ${tfLabel}`
-            : isAllTime ? 'Daily snapshots accumulate automatically' : `No snapshot data for ${tfLabel} yet`}
+            : isAllTime ? 'Showing cost basis vs current value' : `Snapshots accumulate daily — switch to ALL for full history`}
         </p>
 
         {hasChartData ? (
@@ -320,7 +329,8 @@ export default function DashboardView() {
                 <Legend formatter={v => <span className="text-gray-400 text-xs">{v}</span>} iconType="circle" iconSize={8} />
                 <Tooltip formatter={v => [formatCurrency(v),'Value']}
                   contentStyle={{ background:'#111827', border:'1px solid #374151', borderRadius:12 }}
-                  labelStyle={{ color:'#9ca3af' }} />
+                  labelStyle={{ color:'#9ca3af' }}
+                  itemStyle={{ color:'#e5e7eb' }} />
               </PieChart>
             </ResponsiveContainer>
           ) : (

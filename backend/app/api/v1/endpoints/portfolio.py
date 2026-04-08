@@ -375,6 +375,42 @@ def get_portfolio_performance(
     current_value = summary["total_current_value"]
     total_invested = summary["total_invested"]
 
+    # Gap check — if user has investments but missing snapshots, backfill in background
+    if summary["total_investments"] > 0:
+        try:
+            from app.models.portfolio_snapshot import PortfolioSnapshot
+            from app.models.investment import Investment as InvModel
+            import threading
+
+            snapshot_count = db.query(PortfolioSnapshot).filter(
+                PortfolioSnapshot.user_id == current_user.id
+            ).count()
+
+            # Find earliest purchase date
+            earliest = db.query(InvModel.purchase_date).filter(
+                InvModel.user_id == current_user.id,
+                InvModel.purchase_date.isnot(None),
+            ).order_by(InvModel.purchase_date.asc()).first()
+
+            if earliest and earliest[0]:
+                from datetime import date, timedelta
+                days_since_earliest = (date.today() - earliest[0].date()).days
+                # If we have fewer snapshots than days since earliest purchase, backfill
+                if snapshot_count < days_since_earliest - 1:
+                    def _bg_backfill(uid):
+                        from app.db.session import SessionLocal
+                        from app.services.snapshot_backfill import backfill_snapshots_for_user
+                        _db = SessionLocal()
+                        try:
+                            backfill_snapshots_for_user(_db, uid)
+                        except Exception as e:
+                            logger.error(f"Background snapshot backfill failed: {e}")
+                        finally:
+                            _db.close()
+                    threading.Thread(target=_bg_backfill, args=(current_user.id,), daemon=True).start()
+        except Exception as e:
+            logger.warning(f"Gap check failed (non-critical): {e}")
+
     if days is None:
         # ALL TIME — compare against actual purchase cost
         period_pnl = summary["total_profit_loss"]

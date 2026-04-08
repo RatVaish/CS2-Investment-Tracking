@@ -13,11 +13,11 @@ from app.crud import investment as crud_investment
 router = APIRouter()
 
 
-def _maybe_queue_backfill(db, item_id):
+def _maybe_queue_backfill(db, item_id, user_id):
     """Fire-and-forget backfill queue — called after investment creation."""
     try:
         from app.services.backfill_queue import queue_item_for_backfill
-        queue_item_for_backfill(db, item_id)
+        queue_item_for_backfill(db, item_id, user_id)
     except Exception:
         pass
 
@@ -77,7 +77,7 @@ def create_investment(
     inv = crud_investment.create_investment(
         db, investment=investment, user_id=current_user.id
     )
-    _maybe_queue_backfill(db, investment.item_id)
+    _maybe_queue_backfill(db, investment.item_id, current_user.id)
     return inv
 
 
