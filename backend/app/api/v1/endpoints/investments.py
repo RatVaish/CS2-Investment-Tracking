@@ -13,6 +13,15 @@ from app.crud import investment as crud_investment
 router = APIRouter()
 
 
+def _maybe_queue_backfill(db, item_id):
+    """Fire-and-forget backfill queue — called after investment creation."""
+    try:
+        from app.services.backfill_queue import queue_item_for_backfill
+        queue_item_for_backfill(db, item_id)
+    except Exception:
+        pass
+
+
 @router.get("/", response_model=List[InvestmentWithItem])
 def get_investments(
         skip: int = 0,
@@ -70,12 +79,6 @@ def create_investment(
     )
     _maybe_queue_backfill(db, investment.item_id)
     return inv
-    """Fire-and-forget backfill queue — called after investment creation."""
-    try:
-        from app.services.backfill_queue import queue_item_for_backfill
-        queue_item_for_backfill(db, item_id)
-    except Exception:
-        pass
 
 
 @router.patch("/{investment_id}", response_model=Investment)

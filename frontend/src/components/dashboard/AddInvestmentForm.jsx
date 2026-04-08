@@ -167,7 +167,6 @@ export default function AddInvestmentForm() {
                 <p className="text-xs text-gray-500 mb-0.5">Estimated P&L at current Steam price</p>
                 <p className="text-xs text-gray-600 font-mono">
                   {formatCurrency(steamPrice)} × {quantity}
-                  {held && held !== 'Today' && <span className="ml-2 text-gray-700">· held {held}</span>}
                 </p>
               </div>
               <div className="text-right">
