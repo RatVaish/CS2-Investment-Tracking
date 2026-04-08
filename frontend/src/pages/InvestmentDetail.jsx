@@ -540,7 +540,7 @@ export default function InvestmentDetail() {
                   axisLine={false} tickLine={false}
                   tickFormatter={v => formatCurrency(v, null, true)}
                   width={60}
-                  domain={['auto', 'auto']}
+                  domain={[dataMin => Math.min(dataMin, avgEntry || investment?.purchase_price || dataMin) * 0.95, 'auto']}
                 />
                 <Tooltip content={<ChartTooltip />} />
 
@@ -548,10 +548,10 @@ export default function InvestmentDetail() {
                 {avgEntry && (
                   <ReferenceLine
                     y={avgEntry}
-                    stroke="#06b6d4"
+                    stroke="#10b981"
                     strokeDasharray="5 3"
-                    strokeOpacity={0.5}
-                    label={{ value: 'avg entry', position: 'right', fill: '#06b6d4', fontSize: 9, opacity: 0.7 }}
+                    strokeOpacity={0.7}
+                    label={{ value: `avg entry ${formatCurrency(avgEntry)}`, position: 'right', fill: '#10b981', fontSize: 9 }}
                   />
                 )}
 
@@ -559,9 +559,10 @@ export default function InvestmentDetail() {
                 {!avgEntry && investment?.purchase_price && (
                   <ReferenceLine
                     y={investment.purchase_price}
-                    stroke="#4b5563"
+                    stroke="#10b981"
                     strokeDasharray="5 3"
-                    label={{ value: 'entry', position: 'right', fill: '#6b7280', fontSize: 9 }}
+                    strokeOpacity={0.7}
+                    label={{ value: `entry ${formatCurrency(investment.purchase_price)}`, position: 'right', fill: '#10b981', fontSize: 9 }}
                   />
                 )}
 
