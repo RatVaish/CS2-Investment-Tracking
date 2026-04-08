@@ -7,6 +7,7 @@ import io
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 import httpx
 
@@ -303,6 +304,122 @@ async def import_csv(
         "items": created,
     }
 
+
+
+
+# ---------------------------------------------------------------------------
+# Spreadsheet Import (mapped rows — CSV/Excel/TSV parsed client-side)
+# ---------------------------------------------------------------------------
+
+class MappedRow(BaseModel):
+    market_hash_name: str
+    purchase_price: float
+    quantity: int = 1
+    purchase_date: Optional[str] = None
+    notes: Optional[str] = None
+    tags: Optional[list] = None
+
+class MappedImportPayload(BaseModel):
+    rows: list
+
+@router.post("/spreadsheet")
+def import_spreadsheet_mapped(
+        payload: MappedImportPayload,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    """
+    Import investments from pre-mapped spreadsheet rows.
+    Frontend parses CSV/Excel/TSV and maps columns — sends clean rows here.
+    Pro only.
+    """
+    _require_pro(current_user)
+
+    rows = payload.rows
+    if not rows:
+        raise HTTPException(status_code=400, detail="No rows provided.")
+
+    if len(rows) > 500:
+        raise HTTPException(status_code=400, detail="Maximum 500 rows per import.")
+
+    created = []
+    errors = []
+    from datetime import datetime as dt
+    from app.models.investment_tag import InvestmentTag
+
+    for i, row in enumerate(rows):
+        name = (row.get("market_hash_name") or "").strip()
+        if not name:
+            errors.append({"row": i + 2, "error": "Missing item name"})
+            continue
+
+        try:
+            purchase_price = float(row.get("purchase_price", 0))
+            quantity = int(row.get("quantity", 1))
+        except (ValueError, TypeError):
+            errors.append({"row": i + 2, "name": name, "error": "Invalid price or quantity"})
+            continue
+
+        if purchase_price <= 0 or quantity < 1:
+            errors.append({"row": i + 2, "name": name, "error": "Price must be > 0 and quantity >= 1"})
+            continue
+
+        item = _find_item_by_name(db, name)
+        if not item:
+            errors.append({"row": i + 2, "name": name, "error": "Item not found in Floatbase database"})
+            continue
+
+        purchase_date = None
+        raw_date = row.get("purchase_date") or ""
+        if raw_date:
+            for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%Y/%m/%d"):
+                try:
+                    purchase_date = dt.strptime(raw_date.strip(), fmt)
+                    break
+                except ValueError:
+                    pass
+
+        inv = Investment(
+            user_id=current_user.id,
+            item_id=item.id,
+            purchase_price=purchase_price,
+            quantity=quantity,
+            purchase_date=purchase_date,
+            notes=row.get("notes") or None,
+            status="active",
+            import_source="spreadsheet",
+        )
+        db.add(inv)
+        db.flush()  # get inv.id for tags
+
+        # Add tags if provided
+        tags = row.get("tags") or []
+        if isinstance(tags, str):
+            tags = [t.strip() for t in tags.split(",") if t.strip()]
+        for tag in tags:
+            db.add(InvestmentTag(
+                investment_id=inv.id,
+                user_id=current_user.id,
+                tag=tag[:50],
+            ))
+
+        created.append({"row": i + 2, "name": name, "item_id": item.id})
+
+    db.commit()
+
+    # Queue backfill for all newly imported items
+    try:
+        from app.services.backfill_queue import queue_item_for_backfill
+        for c in created:
+            queue_item_for_backfill(db, c["item_id"], current_user.id)
+    except Exception:
+        pass
+
+    return {
+        "imported": len(created),
+        "errors": errors,
+        "items": created,
+    }
 
 @router.get("/csv/template")
 def download_csv_template():

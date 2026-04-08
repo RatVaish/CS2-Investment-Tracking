@@ -13,7 +13,7 @@ const PRO_FEATURES = [
   'Price updates every 30 minutes',
   'Full price history charts',
   'Price alerts & notifications',
-  'Steam inventory import',
+  'Spreadsheet import (CSV, Excel, TSV)',
   'CSV / Excel export',
   'Multi-currency support',
   'Priority support',

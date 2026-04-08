@@ -51,9 +51,9 @@ const FEATURES = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
       </svg>
     ),
-    title: 'Easy Import',
-    desc: 'Import from Steam inventory, CSV, or Excel. Supports Skinport portfolio exports.',
-    comingSoon: true,
+    title: 'Spreadsheet Import',
+    desc: 'Import investments from any spreadsheet — CSV, Excel, TSV. Map your own columns, no reformatting needed.',
+    comingSoon: false,
   },
   {
     icon: (
