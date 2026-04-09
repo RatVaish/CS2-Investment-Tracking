@@ -119,13 +119,14 @@ def run_scheduled_health_check() -> dict:
             notify_steam_restored()
 
     elif new_status in ("expired", "error", "timeout"):
-        # Notify every check while broken
+        # Notify every check while broken + auto-refresh
         notify_steam_expired()
-        # Automatically attempt cookie refresh
         _trigger_cookie_refresh()
 
     elif new_status == "rate_limited":
-        notify_steam_rate_limited()
+        # Only notify once when rate limiting starts, not every 30 mins
+        if prev_status != "rate_limited":
+            notify_steam_rate_limited()
 
     logger.info(f"Steam health check: {new_status} (was: {prev_status})")
     return result

@@ -46,7 +46,7 @@ from app.models.price_history import PriceHistory
 logger = logging.getLogger(__name__)
 
 STEAM_HISTORY_URL = "https://steamcommunity.com/market/pricehistory/"
-REQUEST_DELAY = 1.5   # seconds between requests — Steam rate limits aggressively
+REQUEST_DELAY = 4.0   # seconds between requests — Steam rate limits aggressively
 
 # Resolution thresholds
 HOURLY_CUTOFF_DAYS = 30     # last 30 days → hourly candles
@@ -505,11 +505,22 @@ def run_hourly_update(db: Session) -> dict:
     now = datetime.utcnow()
     session = make_session()
 
-    # Only update items that have been synced before (tracked items)
+    # Only update items that users actually have active investments in
+    # This is the only set that matters for charts — avoids syncing 1900+ unused items
+    from app.models.investment import Investment
+    invested_item_ids = [
+        row[0] for row in db.query(Investment.item_id).filter(
+            Investment.status == 'active',
+            Investment.item_id.isnot(None),
+        ).distinct().all()
+    ]
+
+    six_hours_ago = now - timedelta(hours=6)
     items = db.query(Item).filter(
+        Item.id.in_(invested_item_ids),
         Item.is_active == True,
-        Item.last_synced_at.isnot(None),
-    ).all()
+        Item.last_synced_at < six_hours_ago,
+    ).order_by(Item.last_synced_at.asc()).all()
 
     logger.info(f"Updating {len(items)} tracked items")
 

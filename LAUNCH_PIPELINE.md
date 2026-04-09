@@ -66,6 +66,25 @@ Current form needs a full review and polish pass before launch.
 - [ ] Review PurchaseDatePicker (Exact vs Approx mode)
 - [ ] Fix any remaining edge cases
 
+### Close Trade / Sell Investment UI
+Currently sold investments are tracked in the DB but there's no UI to mark an active investment as sold.
+- [ ] Backend: verify `/investments/{id}/sell` endpoint works correctly (accepts sold_price, sold_fee, sold_at)
+- [ ] Frontend: "Close Trade" button on investment detail page
+- [ ] Frontend: modal — enter sold price, sold date, optional fee
+- [ ] Frontend: sold investments should appear in a separate "Closed" tab in the portfolio table
+- [ ] Frontend: closed trade shows entry price, exit price, realised P&L, ROI, holding period
+- [ ] Frontend: portfolio summary should exclude sold investments from current value but show realised gains separately
+
+### Dashboard Portfolio Value Chart — Bias Fix
+The "portfolio over time" chart is skewed by new investment additions — when a new item is added
+the total invested jumps, making the chart look like performance dropped even if prices didn't move.
+The chart should show **portfolio value relative to cost basis at each point in time**, not raw value.
+- [ ] Review how `portfolio_snapshots` stores `total_invested` vs `total_current_value`
+- [ ] Chart should plot value/cost ratio or absolute P&L over time rather than raw portfolio value
+- [ ] Alternatively: show two lines — cost basis and current value — so the gap is the P&L
+- [ ] Ensure new investment additions don't create artificial dips or spikes in the chart
+- [ ] Test with a user who has investments added at different dates
+
 ### Import Testing
 Backend is built, needs real end-to-end verification.
 - [ ] CSV import — happy path, malformed CSV, items not in DB, free tier limit mid-import
