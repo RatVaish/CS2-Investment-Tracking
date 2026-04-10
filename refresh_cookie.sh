@@ -1,13 +1,9 @@
 #!/bin/bash
 # Floatbase — Steam Cookie Auto-Refresh
-# Extracts steamLoginSecure from running Chromium via CDP,
-# updates .env, restarts backend, notifies Telegram.
 
-set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Load env vars for Telegram
 source <(grep -E "^TELEGRAM_BOT_TOKEN=|^TELEGRAM_CHAT_ID=" .env)
 
 telegram() {
@@ -20,60 +16,66 @@ telegram() {
 
 echo "[$(date)] Starting Steam cookie refresh..."
 
-# Check Chromium is running with debug port
-if ! curl -s http://localhost:9222/json/version > /dev/null 2>&1; then
-    echo "Chromium not running — starting it..."
-    DISPLAY=:100 chromium-browser \
-        --no-sandbox \
-        --user-data-dir=/home/ratul/snap/chromium/common/steam-profile \
-        --remote-debugging-port=9222 \
-        --remote-debugging-address=127.0.0.1 \
-        https://steamcommunity.com/market/ &
-    sleep 10
+if ! curl -s http://localhost:9222/json > /dev/null 2>&1; then
+    telegram "🔴 <b>Floatbase — Cookie refresh failed</b>%0AChrome not running on port 9222."
+    echo "Chrome not running"
+    exit 1
 fi
 
-# Extract cookie via CDP
-COOKIE=$(python3 - << 'PYEOF'
+COOKIE=$(python3 - << 'EOF'
 import json, urllib.request, asyncio, websockets, sys
 
 async def get_cookie():
     try:
-        pages = json.loads(urllib.request.urlopen('http://localhost:9222/json', timeout=10).read())
+        pages = json.loads(urllib.request.urlopen('http://localhost:9222/json').read())
         if not pages:
-            print("", end="")
+            print("NO_PAGES")
             return
         page_ws = pages[0]['webSocketDebuggerUrl']
         async with websockets.connect(page_ws) as ws:
+            # Get cookies directly — no navigation, avoids response ordering issues
             await ws.send(json.dumps({'id':1,'method':'Network.getAllCookies','params':{}}))
-            resp = json.loads(await ws.recv())
+            # Drain responses until we get our id:1 response
+            for _ in range(10):
+                resp = json.loads(await ws.recv())
+                if resp.get('id') == 1:
+                    break
             cookies = resp.get('result',{}).get('cookies',[])
             steam = [c for c in cookies if c.get('name') == 'steamLoginSecure']
             if steam:
                 best = max(steam, key=lambda c: len(c.get('value','')))
-                print(best['value'], end="")
+                print(best['value'])
+            else:
+                print("NOT_FOUND")
     except Exception as e:
-        sys.stderr.write(f"Error: {e}\n")
-        print("", end="")
+        print(f"ERROR:{e}", file=sys.stderr)
+        print("NOT_FOUND")
 
 asyncio.run(get_cookie())
-PYEOF
+EOF
 )
 
-if [ -z "$COOKIE" ] || [ ${#COOKIE} -lt 100 ]; then
-    echo "[$(date)] ERROR: Failed to extract cookie (length: ${#COOKIE})"
-    telegram "❌ <b>Floatbase — Cookie refresh FAILED</b>%0A%0AChromium running but cookie not found. Steam session may have expired — log in again via VNC."
+if [[ "$COOKIE" == "NOT_FOUND" || "$COOKIE" == "NO_PAGES" || "$COOKIE" == ERROR* || -z "$COOKIE" ]]; then
+    telegram "🔴 <b>Floatbase — Cookie refresh failed</b>%0ACould not extract steamLoginSecure.%0ALog into Steam via VNC on port 5900."
+    echo "Failed to extract cookie: $COOKIE"
     exit 1
 fi
 
-echo "[$(date)] Cookie extracted (length: ${#COOKIE})"
+echo "Cookie extracted, length: ${#COOKIE}"
 
-# Update .env
-sed -i "s|^STEAM_LOGIN_SECURE=.*|STEAM_LOGIN_SECURE=${COOKIE}|" .env
-echo "[$(date)] Updated .env"
+python3 - << PYEOF
+import re
+cookie = """$COOKIE"""
+with open('.env', 'r') as f:
+    env = f.read()
+env = re.sub(r'^STEAM_LOGIN_SECURE=.*$', f'STEAM_LOGIN_SECURE={cookie}', env, flags=re.MULTILINE)
+with open('.env', 'w') as f:
+    f.write(env)
+print("Updated .env")
+PYEOF
 
-# Restart backend
 docker compose up --build -d backend
-echo "[$(date)] Backend restarted"
+echo "Backend restarted"
 
-telegram "🔄 <b>Floatbase — Steam cookie refreshed</b>%0A%0AAutomatic refresh successful. $(date '+%Y-%m-%d %H:%M')"
-echo "[$(date)] Done!"
+telegram "🟢 <b>Floatbase — Steam cookie refreshed</b>%0ACookie updated and backend restarted."
+echo "[$(date)] Cookie refresh complete"
