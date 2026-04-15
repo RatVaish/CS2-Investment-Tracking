@@ -4,33 +4,27 @@ import { getCookie, setCookie, getUserCurrency } from '../api/client';
 
 const AuthContext = createContext(null);
 
-// Token storage helpers — use both localStorage AND a long-lived cookie
-// so sessions survive browser restarts
 const storeTokens = (accessToken, refreshToken, remember = true) => {
   localStorage.setItem('access_token', accessToken);
   localStorage.setItem('refresh_token', refreshToken);
   if (remember) {
-    setCookie('access_token', accessToken, 7);    // 7 days
-    setCookie('refresh_token', refreshToken, 30); // 30 days
+    setCookie('access_token', accessToken, 7);
+    setCookie('refresh_token', refreshToken, 30);
   }
 };
 
 const clearTokens = () => {
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
-  // Clear cookies too
   document.cookie = 'access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
   document.cookie = 'refresh_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
 };
 
-const getStoredToken = () => {
-  // Check localStorage first, then cookie fallback
-  return localStorage.getItem('access_token') || getCookie('access_token');
-};
+const getStoredToken = () =>
+  localStorage.getItem('access_token') || getCookie('access_token');
 
-const getStoredRefreshToken = () => {
-  return localStorage.getItem('refresh_token') || getCookie('refresh_token');
-};
+const getStoredRefreshToken = () =>
+  localStorage.getItem('refresh_token') || getCookie('refresh_token');
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -46,10 +40,8 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // On mount: restore session from stored tokens, dispatch currency event
   useEffect(() => {
     const checkAuth = async () => {
-      // Restore token from cookie if localStorage is empty (new tab/browser restart)
       const cookieToken = getCookie('access_token');
       if (cookieToken && !localStorage.getItem('access_token')) {
         localStorage.setItem('access_token', cookieToken);
@@ -60,13 +52,10 @@ export const AuthProvider = ({ children }) => {
       }
 
       const token = getStoredToken();
-      if (token) {
-        await fetchAndSetUser();
-      }
+      if (token) await fetchAndSetUser();
 
       setLoading(false);
 
-      // Dispatch currency event so Navbar updates without refresh
       const currency = getUserCurrency();
       window.dispatchEvent(new CustomEvent('currencychange', { detail: currency }));
     };
@@ -81,10 +70,7 @@ export const AuthProvider = ({ children }) => {
       const userData = await fetchAndSetUser();
       return { success: true, user: userData };
     } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || 'Login failed',
-      };
+      return { success: false, error: error.response?.data?.detail || 'Login failed' };
     }
   };
 
@@ -95,16 +81,24 @@ export const AuthProvider = ({ children }) => {
     return { success: !!userData, user: userData };
   };
 
+  // Register: does NOT auto-login. Returns needsVerification so modal shows OTP step.
   const register = async (email, username, password) => {
     try {
       await authAPI.register(email, username, password);
-      return await login(email, password);
+      // Now log in to get tokens (user exists but unverified — that's fine)
+      const loginResp = await authAPI.login(email, password);
+      storeTokens(loginResp.access_token, loginResp.refresh_token, true);
+      await fetchAndSetUser();
+      return { success: true, needsVerification: true };
     } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || 'Registration failed',
-      };
+      return { success: false, error: error.response?.data?.detail || 'Registration failed' };
     }
+  };
+
+  // After OTP verified — refresh user object so email_verified flips to true
+  const completeVerification = async (accessToken, refreshToken) => {
+    storeTokens(accessToken, refreshToken, true);
+    await fetchAndSetUser();
   };
 
   const logout = () => {
@@ -119,6 +113,7 @@ export const AuthProvider = ({ children }) => {
       loginWithTokens,
       register,
       logout,
+      completeVerification,
       isAuthenticated: !!user,
       loading,
       refreshUser: fetchAndSetUser,

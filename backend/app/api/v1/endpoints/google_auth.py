@@ -72,6 +72,11 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
         )
         user = create_user(db, user_create)
 
+    # Google has already verified this email — mark it as verified
+    if not user.email_verified:
+        user.email_verified = True
+        db.commit()
+
     # Create JWT tokens
     access_token = create_access_token(data={"sub": user.email})
     refresh_token = create_refresh_token(data={"sub": user.email})

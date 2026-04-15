@@ -64,28 +64,26 @@ async def steam_callback(request: Request, db: Session = Depends(get_db)):
     user = get_user_by_steam_id(db, steam_id)
 
     if not user:
-        # Create new user with Steam data
+        # Create new Steam user — no email until they add one
+        from app.crud.user import create_steam_user
         username = player.get("personaname", f"steam_user_{steam_id}")
-        email = f"{steam_id}@steam.placeholder"
-
-        user_create = UserCreate(
-            email=email,
+        user = create_steam_user(
+            db,
+            steam_id=steam_id,
             username=username,
-            password="steam_oauth_user_no_password"
+            avatar_url=player.get("avatarfull"),
+            profile_url=player.get("profileurl"),
         )
-        user = create_user(db, user_create)
 
-        # Update Steam-specific fields directly on the model
-        user.steam_id = steam_id
-        user.steam_profile_url = player.get("profileurl")
-        user.avatar_url = player.get("avatarfull")
-        db.commit()
-        db.refresh(user)
+    # Create JWT tokens — use user ID as sub since there may be no email
+    access_token = create_access_token(data={"sub": str(user.id)})
+    refresh_token = create_refresh_token(data={"sub": str(user.id)})
 
-    # Create JWT tokens
-    access_token = create_access_token(data={"sub": user.email})
-    refresh_token = create_refresh_token(data={"sub": user.email})
-
-    # Redirect to frontend with tokens
-    frontend_url = f"{settings.FRONTEND_URL}/auth/callback?access_token={access_token}&refresh_token={refresh_token}"
+    # If Steam user has no verified email, flag so frontend shows add-email step
+    needs_email = not user.email or user.email.endswith("@steam.placeholder") or not user.email_verified
+    frontend_url = (
+        f"{settings.FRONTEND_URL}/auth/callback"
+        f"?access_token={access_token}&refresh_token={refresh_token}"
+        f"&needs_email={'true' if needs_email else 'false'}"
+    )
     return RedirectResponse(frontend_url)
