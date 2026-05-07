@@ -60,7 +60,11 @@ def register(
     new_user.verification_code_expires_at = datetime.utcnow() + timedelta(minutes=15)
     db.commit()
 
-    send_verification_email(new_user.email, code, new_user.username)
+    # Send email — intentionally fire-and-forget, never block registration
+    try:
+        send_verification_email(new_user.email, code, new_user.username)
+    except Exception as e:
+        print(f"[EMAIL] Non-fatal send error during registration: {e}")
 
     return {"message": "Registration successful. Check your email for your verification code."}
 
@@ -126,7 +130,7 @@ def send_verification_code(
         current_user.verification_code_expires_at
         and current_user.verification_code_expires_at > datetime.utcnow() + timedelta(minutes=14)
     ):
-        raise HTTPException(status_code=429, detail="Please wait before requesting another code")
+        raise HTTPException(status_code=429, detail="A code was just sent — please check your inbox or wait 60 seconds before requesting another")
 
     code = generate_otp()
     current_user.verification_code = code

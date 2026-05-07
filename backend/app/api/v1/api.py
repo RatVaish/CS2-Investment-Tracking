@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from app.api.v1.endpoints import auth, users, investments, prices, portfolio, items
-from app.api.v1.endpoints import google_auth, steam_auth, payments, import_data, health
+from app.api.v1.endpoints import google_auth, steam_auth, payments, import_data, health, updates
+from app.api.v1.endpoints import alerts, notifications
 
 api_router = APIRouter()
 
@@ -15,3 +16,6 @@ api_router.include_router(import_data.router, prefix="/import", tags=["import"])
 api_router.include_router(health.router, prefix="/health", tags=["health"])
 api_router.include_router(google_auth.router, prefix="/auth/google", tags=["google-auth"])
 api_router.include_router(steam_auth.router, prefix="/auth/steam", tags=["steam-auth"])
+api_router.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
+api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
+api_router.include_router(updates.router, prefix="/updates", tags=["updates"])

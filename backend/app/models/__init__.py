@@ -16,6 +16,8 @@ from app.models.exchange_rate import ExchangeRate
 from app.models.item_sync_log import ItemSyncLog
 from app.models.price_update_log import PriceUpdateLog
 from app.models.market_benchmark import MarketBenchmark
+from app.models.update import Update
+from app.models.user_update_read import UserUpdateRead
 
 __all__ = [
     "User",
@@ -36,4 +38,6 @@ __all__ = [
     "ItemSyncLog",
     "PriceUpdateLog",
     "MarketBenchmark",
+    "Update",
+    "UserUpdateRead",
 ]

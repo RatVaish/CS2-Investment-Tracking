@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuth } from './contexts/AuthContext';
@@ -11,6 +11,8 @@ import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
 import Cookies from './pages/Cookies';
 import Import from './pages/Import';
+import UpdatesModal from './components/UpdatesModal';
+import { getUnreadUpdates } from './api/updates';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuth();
@@ -18,7 +20,33 @@ function ProtectedRoute({ children }) {
 }
 
 function App() {
-  const { loading } = useAuth();
+  const { loading, isAuthenticated } = useAuth();
+  const [unreadUpdates, setUnreadUpdates] = useState([]);
+  const [showUpdatesModal, setShowUpdatesModal] = useState(false);
+
+  // Fetch unread updates when user is authenticated
+  useEffect(() => {
+    if (isAuthenticated && !loading) {
+      fetchUnreadUpdates();
+    }
+  }, [isAuthenticated, loading]);
+
+  const fetchUnreadUpdates = async () => {
+    try {
+      const updates = await getUnreadUpdates();
+      if (updates && updates.length > 0) {
+        setUnreadUpdates(updates);
+        setShowUpdatesModal(true);
+      }
+    } catch (error) {
+      console.error("Failed to fetch updates:", error);
+    }
+  };
+
+  const handleCloseUpdates = () => {
+    setShowUpdatesModal(false);
+    setUnreadUpdates([]);
+  };
 
   if (loading) {
     return (
@@ -46,6 +74,12 @@ function App() {
           error: { iconTheme: { primary: '#ef4444', secondary: '#0f172a' } },
         }}
       />
+
+      {/* Updates Modal */}
+      {showUpdatesModal && (
+        <UpdatesModal updates={unreadUpdates} onClose={handleCloseUpdates} />
+      )}
+
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/auth/callback" element={<GoogleCallback />} />

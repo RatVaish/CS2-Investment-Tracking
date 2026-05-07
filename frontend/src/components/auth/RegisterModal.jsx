@@ -13,6 +13,7 @@ function RegisterModal({ onClose, onSwitchToLogin }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [verified, setVerified] = useState(false);
   const { register, completeVerification } = useAuth();
   const navigate = useNavigate();
   const codeRefs = useRef([]);
@@ -23,6 +24,13 @@ function RegisterModal({ onClose, onSwitchToLogin }) {
     const t = setTimeout(() => setResendCooldown(c => c - 1), 1000);
     return () => clearTimeout(t);
   }, [resendCooldown]);
+
+  // Auto-close after success
+  useEffect(() => {
+    if (!verified) return;
+    const t = setTimeout(() => { onClose(); navigate('/app'); }, 2000);
+    return () => clearTimeout(t);
+  }, [verified]);
 
   const handleRegister = async (e) => {
     e.preventDefault();
@@ -74,8 +82,7 @@ function RegisterModal({ onClose, onSwitchToLogin }) {
     try {
       const result = await authAPI.verifyCode(fullCode);
       await completeVerification(result.access_token, result.refresh_token);
-      onClose();
-      navigate('/app');
+      setVerified(true);
     } catch (err) {
       setError(err.response?.data?.detail || 'Invalid code. Please try again.');
     }
@@ -108,8 +115,17 @@ function RegisterModal({ onClose, onSwitchToLogin }) {
         </button>
 
         <div className="p-8">
-          {step === 'register' ? (
-            <>
+          {verified ? (
+            <div className="text-center py-4">
+              <div className="w-16 h-16 bg-emerald-500/10 border border-emerald-500/30 rounded-full flex items-center justify-center mx-auto mb-5">
+                <svg className="w-8 h-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-2">Email verified!</h2>
+              <p className="text-gray-400 text-sm">Taking you to your dashboard...</p>
+            </div>
+          ) : step === 'register' ? (            <>
               <h2 className="text-3xl font-bold text-white mb-2">Create Account</h2>
               <p className="text-gray-400 mb-8">Start tracking your CS2 investments</p>
 

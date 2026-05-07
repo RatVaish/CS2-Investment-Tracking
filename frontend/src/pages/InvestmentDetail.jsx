@@ -7,6 +7,8 @@ import {
 import Navbar from '../components/Navbar';
 import { investmentsAPI, portfolioAPI } from '../api/investments';
 import { formatCurrency } from '../utils/currency';
+import { useAuth } from '../contexts/AuthContext';
+import { alertsAPI } from '../api/alerts';
 import toast from 'react-hot-toast';
 
 const RESOLUTIONS = [
@@ -237,6 +239,7 @@ function BackfillWaiting({ itemId, onReady }) {
 export default function InvestmentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [investment, setInvestment] = useState(null);
   const [positions, setPositions]   = useState([]);   // all user positions for this item
@@ -245,6 +248,14 @@ export default function InvestmentDetail() {
   const [loading, setLoading]       = useState(true);
   const [chartLoading, setChartLoading] = useState(false);
   const [isQueued, setIsQueued]     = useState(false); // backfill queued, no data yet
+
+  // Alert state
+  const [alerts, setAlerts]         = useState([]);
+  const [alertMarket, setAlertMarket]       = useState('steam');
+  const [alertDirection, setAlertDirection] = useState('below');
+  const [alertPrice, setAlertPrice]         = useState('');
+  const [alertLoading, setAlertLoading]     = useState(false);
+  const isPro = user?.tier === 'pro';
 
   const fetchInvestment = useCallback(async () => {
     try {
@@ -300,12 +311,50 @@ export default function InvestmentDetail() {
     }
   }, []);
 
+  const fetchAlerts = useCallback(async () => {
+    if (!isPro) return;
+    try {
+      const data = await alertsAPI.list();
+      setAlerts(data);
+    } catch {}
+  }, [isPro]);
+
+  const handleCreateAlert = async () => {
+    if (!alertPrice || parseFloat(alertPrice) <= 0) return toast.error('Enter a valid price');
+    setAlertLoading(true);
+    try {
+      await alertsAPI.create({
+        item_id: investment.item_id,
+        market: alertMarket,
+        target_price: parseFloat(alertPrice),
+        direction: alertDirection,
+      });
+      toast.success('Alert created');
+      setAlertPrice('');
+      fetchAlerts();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to create alert');
+    }
+    setAlertLoading(false);
+  };
+
+  const handleDeleteAlert = async (alertId) => {
+    try {
+      await alertsAPI.delete(alertId);
+      setAlerts(prev => prev.filter(a => a.id !== alertId));
+      toast.success('Alert removed');
+    } catch {
+      toast.error('Failed to remove alert');
+    }
+  };
+
   useEffect(() => { fetchInvestment(); }, [fetchInvestment]);
 
   useEffect(() => {
     if (!investment) return;
     fetchChart(investment, selectedResolution);
     fetchPositions(investment.item_id);
+    fetchAlerts();
   }, [investment]);
 
   // When backfill completes, reload chart
@@ -668,6 +717,77 @@ export default function InvestmentDetail() {
                 <p className="text-gray-400 text-sm leading-relaxed">{investment.notes}</p>
               </div>
             )}
+
+            {/* Price Alerts */}
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+              <h3 className="text-white font-semibold mb-4">Price Alerts</h3>
+              {!isPro ? (
+                <div className="text-center py-2">
+                  <p className="text-gray-500 text-sm mb-3">Price alerts are a Pro feature</p>
+                  <button onClick={() => navigate('/app/billing')}
+                    className="px-4 py-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-sm rounded-lg hover:bg-cyan-500/20 transition-colors">
+                    Upgrade to Pro
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* Existing active alerts for this item */}
+                  {alerts.filter(a => a.item_id === investment?.item_id && a.is_active).map(a => (
+                    <div key={a.id} className="flex items-center justify-between p-3 bg-gray-800/40 rounded-xl mb-2">
+                      <div>
+                        <p className="text-gray-300 text-sm font-mono">
+                          {a.direction === 'above' ? '↑ above' : '↓ below'} ${a.target_price.toFixed(2)}
+                        </p>
+                        <p className="text-gray-600 text-xs">{a.market.toUpperCase()}</p>
+                      </div>
+                      <button onClick={() => handleDeleteAlert(a.id)}
+                        className="text-gray-600 hover:text-red-400 transition-colors">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+
+                  {/* Create new alert */}
+                  <div className="space-y-2 mt-1">
+                    <div className="grid grid-cols-2 gap-2">
+                      <select value={alertMarket} onChange={e => setAlertMarket(e.target.value)}
+                        className="bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-cyan-500">
+                        <option value="steam">Steam</option>
+                        <option value="csfloat">CSFloat</option>
+                        <option value="buff163">Buff163</option>
+                      </select>
+                      <select value={alertDirection} onChange={e => setAlertDirection(e.target.value)}
+                        className="bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-cyan-500">
+                        <option value="below">↓ drops below</option>
+                        <option value="above">↑ rises above</option>
+                      </select>
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        value={alertPrice}
+                        onChange={e => setAlertPrice(e.target.value)}
+                        placeholder="Target price (USD)"
+                        step="0.01" min="0"
+                        className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-600 focus:outline-none focus:border-cyan-500 transition-colors"
+                      />
+                      <button
+                        onClick={handleCreateAlert}
+                        disabled={alertLoading || !alertPrice}
+                        className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 disabled:text-gray-500 text-black text-sm font-semibold rounded-lg transition-colors"
+                      >
+                        {alertLoading ? '...' : 'Set'}
+                      </button>
+                    </div>
+                    <p className="text-gray-700 text-xs">
+                      Checked every 30 min · in-app notification on trigger
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </main>

@@ -39,6 +39,10 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     email_verified = Column(Boolean, default=False, nullable=False)
 
+    # Email verification OTP
+    verification_code = Column(String(6), nullable=True)
+    verification_code_expires_at = Column(TIMESTAMP, nullable=True)
+
     # UI preferences
     preferences = Column(JSONB, nullable=True, default=dict)
 
@@ -67,6 +71,8 @@ class User(Base):
     watchlist = relationship("UserWatchlist", back_populates="user", cascade="all, delete-orphan")
     import_batches = relationship("ImportBatch", back_populates="user", cascade="all, delete-orphan")
     audit_logs = relationship("InvestmentAudit", back_populates="user")
+    update_reads = relationship("UserUpdateRead", back_populates="user", cascade="all, delete-orphan")
+
 
     def __repr__(self):
         return f"<User {self.username} tier={self.tier}>"

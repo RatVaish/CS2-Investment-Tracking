@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from app.api.deps import get_db, get_current_user
 from app.schemas.user import User as UserSchema, UserUpdate, UserWithStats
 from app.models.user import User
 from app.crud.user import update_user, get_user_by_email, get_user_by_username
+from app.core.security import verify_password, get_password_hash
 
 router = APIRouter()
 
@@ -75,3 +77,29 @@ def delete_current_user(
     if not delete_user(db, user_id=current_user.id):
         raise HTTPException(status_code=404, detail="User not found")
     return {"message": "Account successfully deleted"}
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.post("/me/change-password")
+def change_password(
+        data: ChangePasswordRequest,
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+):
+    """Change the current user's password."""
+    if not current_user.password_hash:
+        raise HTTPException(status_code=400, detail="This account uses OAuth login and has no password")
+
+    if not verify_password(data.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    if len(data.new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+
+    current_user.password_hash = get_password_hash(data.new_password)
+    db.commit()
+    return {"message": "Password updated"}

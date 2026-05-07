@@ -2,15 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { authAPI } from '../../api/auth';
 
-/**
- * VerifyEmailModal — shown for:
- * 1. Existing unverified email/password users (has email, not verified)
- * 2. Steam users who need to add + verify an email
- */
 export default function VerifyEmailModal({ onClose }) {
-  const { user, completeVerification, refreshUser } = useAuth();
+  const { user, completeVerification } = useAuth();
 
-  // Steam users have no real email yet
   const needsEmailEntry = !user?.email || user.email.endsWith('@steam.placeholder');
 
   const [step, setStep] = useState(needsEmailEntry ? 'add-email' : 'verify');
@@ -19,14 +13,8 @@ export default function VerifyEmailModal({ onClose }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [verified, setVerified] = useState(false);
   const codeRefs = useRef([]);
-
-  // Auto-send code when modal opens for users who already have an email
-  useEffect(() => {
-    if (step === 'verify' && !needsEmailEntry) {
-      handleSendCode();
-    }
-  }, []);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -34,15 +22,12 @@ export default function VerifyEmailModal({ onClose }) {
     return () => clearTimeout(t);
   }, [resendCooldown]);
 
-  const handleSendCode = async () => {
-    setError('');
-    try {
-      await authAPI.sendVerificationCode();
-      setResendCooldown(60);
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to send code.');
-    }
-  };
+  // Auto-close after success
+  useEffect(() => {
+    if (!verified) return;
+    const t = setTimeout(() => onClose(), 2000);
+    return () => clearTimeout(t);
+  }, [verified, onClose]);
 
   const handleAddEmail = async (e) => {
     e.preventDefault();
@@ -89,7 +74,7 @@ export default function VerifyEmailModal({ onClose }) {
     try {
       const result = await authAPI.verifyCode(fullCode);
       await completeVerification(result.access_token, result.refresh_token);
-      onClose();
+      setVerified(true);
     } catch (err) {
       setError(err.response?.data?.detail || 'Invalid code. Please try again.');
     }
@@ -103,23 +88,44 @@ export default function VerifyEmailModal({ onClose }) {
       await authAPI.sendVerificationCode();
       setResendCooldown(60);
       setCode(['', '', '', '', '', '']);
-      codeRefs.current[0]?.focus();
+      setTimeout(() => codeRefs.current[0]?.focus(), 50);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to resend.');
+      // If rate limited, show a softer message
+      const detail = err.response?.data?.detail || '';
+      if (err.response?.status === 429) {
+        setError('A code was already sent — check your inbox or spam folder.');
+      } else {
+        setError(detail || 'Failed to resend. Try again.');
+      }
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="relative w-full max-w-md bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl">
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+        {!verified && (
+          <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
 
         <div className="p-8">
-          {step === 'add-email' ? (
+
+          {/* ── Success state ── */}
+          {verified ? (
+            <div className="text-center py-4">
+              <div className="w-16 h-16 bg-emerald-500/10 border border-emerald-500/30 rounded-full flex items-center justify-center mx-auto mb-5">
+                <svg className="w-8 h-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-2">Email verified!</h2>
+              <p className="text-gray-400 text-sm">You're all set. Closing in a moment...</p>
+            </div>
+
+          ) : step === 'add-email' ? (
             <>
               <div className="text-center mb-8">
                 <div className="w-14 h-14 bg-cyan-500/10 border border-cyan-500/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -128,9 +134,7 @@ export default function VerifyEmailModal({ onClose }) {
                   </svg>
                 </div>
                 <h2 className="text-2xl font-bold text-white mb-2">Add your email</h2>
-                <p className="text-gray-400 text-sm">
-                  Add an email address to enable price alerts and account notifications.
-                </p>
+                <p className="text-gray-400 text-sm">Add an email to enable price alerts and notifications.</p>
               </div>
 
               {error && (
@@ -160,12 +164,13 @@ export default function VerifyEmailModal({ onClose }) {
                 </button>
               </form>
             </>
+
           ) : (
             <>
               <div className="text-center mb-8">
                 <div className="w-14 h-14 bg-cyan-500/10 border border-cyan-500/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <svg className="w-7 h-7 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
                 </div>
                 <h2 className="text-2xl font-bold text-white mb-2">Check your email</h2>
@@ -173,11 +178,12 @@ export default function VerifyEmailModal({ onClose }) {
                   We sent a 6-digit code to<br />
                   <span className="text-white font-medium">{email}</span>
                 </p>
+                <p className="text-gray-600 text-xs mt-2">Check your spam folder if you don't see it</p>
               </div>
 
               {error && (
-                <div className="mb-5 p-4 bg-red-500/10 border border-red-500/50 rounded-lg">
-                  <p className="text-red-400 text-sm text-center">{error}</p>
+                <div className="mb-5 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                  <p className="text-amber-400 text-sm text-center">{error}</p>
                 </div>
               )}
 

@@ -58,7 +58,7 @@ def job_backfill_queue():
 
 
 def job_update_csfloat_prices():
-    """Update CSFloat prices for all items (every 30 minutes)."""
+    """Update CSFloat prices for all items (every 30 minutes), then check alerts."""
     logger.info("JOB: CSFloat price update starting")
     db = SessionLocal()
     try:
@@ -68,6 +68,24 @@ def job_update_csfloat_prices():
         logger.info("JOB: CSFloat price update complete")
     except Exception as e:
         logger.error(f"JOB: CSFloat price update failed: {e}")
+    finally:
+        db.close()
+
+    # Run alert check after prices are fresh
+    job_check_alerts()
+
+
+def job_check_alerts():
+    """Check all active price alerts against current prices."""
+    logger.info("JOB: Alert check starting")
+    db = SessionLocal()
+    try:
+        from app.services.alert_checker import run_alert_check
+        result = run_alert_check(db)
+        if result["triggered"] > 0:
+            logger.info(f"JOB: Alert check complete: {result}")
+    except Exception as e:
+        logger.error(f"JOB: Alert check failed: {e}")
     finally:
         db.close()
 
