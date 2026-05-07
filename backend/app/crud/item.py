@@ -1,6 +1,6 @@
 from typing import Optional, List
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, func, desc, case
 from app.models.item import Item
 from app.models.item_price import ItemPrice
 
@@ -18,16 +18,57 @@ def get_items(db: Session, skip: int = 0, limit: int = 100) -> List[Item]:
 
 
 def search_items(db: Session, query: str, limit: int = 20) -> List[Item]:
+    """
+    Search items with smart ranking:
+    1. Item type matches get boosted (e.g., "case" prioritizes item_type='case')
+    2. Sort by trading volume (most traded first)
+    3. Alphabetical as final tiebreaker
+    """
     search_term = f"%{query}%"
-    return db.query(Item).filter(
-        or_(
-            Item.market_hash_name.ilike(search_term),
-            Item.base_name.ilike(search_term),
-            Item.weapon_name.ilike(search_term),
-            Item.skin_name.ilike(search_term),
+    query_lower = query.lower().strip()
+    
+    # Subquery to get max volume across all markets for each item
+    volume_subquery = (
+        db.query(
+            ItemPrice.item_id,
+            func.max(ItemPrice.volume).label('max_volume')
+        )
+        .group_by(ItemPrice.item_id)
+        .subquery()
+    )
+    
+    # Main query with volume join
+    items_query = (
+        db.query(Item)
+        .outerjoin(volume_subquery, Item.id == volume_subquery.c.item_id)
+        .filter(
+            or_(
+                Item.market_hash_name.ilike(search_term),
+                Item.base_name.ilike(search_term),
+                Item.weapon_name.ilike(search_term),
+                Item.skin_name.ilike(search_term),
+            ),
+            Item.is_active == True
+        )
+    )
+    
+    # Smart ranking:
+    # 1. Boost if item_type matches the query (e.g., "case" -> item_type='case')
+    # 2. Sort by volume descending (nulls last)
+    # 3. Alphabetical tiebreaker
+    items_query = items_query.order_by(
+        # Boost if item_type matches the query
+        case(
+            (Item.item_type.ilike(query_lower), 0),
+            else_=1
         ),
-        Item.is_active == True
-    ).limit(limit).all()
+        # Sort by volume descending (nulls last)
+        desc(func.coalesce(volume_subquery.c.max_volume, 0)),
+        # Alphabetical tiebreaker
+        Item.market_hash_name
+    )
+    
+    return items_query.limit(limit).all()
 
 
 def get_items_by_type(db: Session, item_type: str, skip: int = 0, limit: int = 100) -> List[Item]:
